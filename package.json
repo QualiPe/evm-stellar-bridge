@@ -1,0 +1,17 @@
+{
+  "name": "evm-stellar-bridge",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "client": "pnpm --filter client dev",
+    "server": "pnpm --filter server start:dev",
+    "contracts:evm:compile": "pnpm --filter ./contracts/evm hardhat compile",
+    "contracts:stellar:build": "cd contracts/stellar/htlc-contract && cargo build",
+    "dev": "pnpm run server & pnpm run client"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.13.1"
+}
