@@ -1,3 +1,5 @@
+export type Direction = 'EVM_TO_STELLAR' | 'STELLAR_TO_EVM';
+
 export type IntentStatus =
   | 'created'
   | 'evm_locked'
@@ -16,22 +18,32 @@ export interface CreateIntentInput {
   toAddress: string;
 }
 
-export interface IntentPlan {
-  hash: `0x${string}`;
-  timelocks: { ethSec: number; stellarSec: number };
-  minLock: { evm: string; stellar: string };
-  quote?: {
-    chainId: number;
-    fromToken: string;
-    toToken: string;
-    amountInMinor: string;
+export interface LegEvm {
+    via: '1inch';
+    from: string;
+    to: string;
     toAmountMinor?: string;
-  };
+    raw?: any;
+}
+  
+export interface LegStellar {
+    via: 'strict-send' | 'strict-receive';
+    destAmount?: string;
+    path?: any[];
+    raw?: any;
 }
 
+export interface IntentPlan {
+    hash: `0x${string}`;
+    timelocks: { ethSec: number; stellarSec: number };
+    minLock: { evm: string; stellar: string };
+    evmLeg?: LegEvm;
+    stellarLeg?: LegStellar;
+}
+  
 export interface Intent {
-  id: string;
-  status: IntentStatus;
-  plan: IntentPlan;
-  tx?: Record<string, string | undefined>;
+    id: string;
+    status: IntentStatus;
+    plan: IntentPlan;
+    tx?: Record<string, string>;
 }
