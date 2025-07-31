@@ -1,6 +1,6 @@
-# Ethereum HTLC for USDC
+# Multi HTLC for USDC
 
-Hash Time-Locked Contract for atomic swaps with USDC on Ethereum.
+Multi-swap Hash Time-Locked Contract for atomic swaps with USDC on Ethereum. Supports multiple concurrent HTLC swaps with unique swap IDs.
 
 ## 🚀 Quick Start
 
@@ -17,29 +17,33 @@ npm test
 
 ## 📊 Deployment
 
-- **Contract:** `0x6EC02E043543883903443F1afDa2c746C3bC07c1`
+- **Contract:** `MultiHtlcUSDC`
 - **Network:** Sepolia Testnet
-- **USDC:** `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`
+- **USDC:** Mock USDC for testing
 
 ## 📖 Usage
 
 ```javascript
-// Fund HTLC
-await htlc.fund(recipient, amount, hashlock, timelock);
+// Fund new HTLC swap
+const swapId = await multiHtlc.fund(recipient, amount, hashlock, timelock);
 
-// Withdraw
-await htlc.withdraw(preimage);
+// Withdraw using preimage
+await multiHtlc.withdraw(swapId, preimage);
 
-// Refund (after timelock)
-await htlc.refund();
+// Refund after timelock expires
+await multiHtlc.refund(swapId);
+
+// Get swap details
+const details = await multiHtlc.getSwapDetails(swapId);
 ```
 
-## 🔧 Functions
+## 🔧 Key Features
 
-- `fund()` - Lock USDC in HTLC
-- `withdraw()` - Claim with preimage
-- `refund()` - Get funds back after timeout
-- `getSwapDetails()` - View swap info
+- **Multiple Swaps**: Support for concurrent HTLC swaps
+- **Unique IDs**: Each swap has a unique `swapId`
+- **State Tracking**: Track funded, withdrawn, and refunded states
+- **Expiration Check**: Verify if swaps are expired
+- **Balance Management**: Monitor contract USDC balance
 
 ## 🧪 Testing
 
@@ -47,4 +51,4 @@ await htlc.refund();
 npm test
 ```
 
-Tests cover: funding, withdrawal, refund scenarios. 
+Tests cover: multi-swap funding, withdrawal, refund, and state management. 

@@ -4,6 +4,7 @@
     "compile": "hardhat compile",
     "test": "hardhat test",
     "deploy:sepolia": "hardhat run scripts/deploy_htlc.js --network sepolia",
+    "deploy:multi:sepolia": "hardhat run scripts/deploy_multi_htlc.js --network sepolia",
     "deploy:local": "hardhat run scripts/deploy_htlc.js --network localhost"
   },
   "devDependencies": {
