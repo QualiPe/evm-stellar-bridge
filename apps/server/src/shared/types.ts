@@ -12,7 +12,7 @@ export type IntentStatus =
 
 export interface CreateIntentInput {
     direction: Direction;
-    fromChainId: number;
+    fromChainId?: number;
     fromToken: string;
     toToken: string;
     amountIn: string;
