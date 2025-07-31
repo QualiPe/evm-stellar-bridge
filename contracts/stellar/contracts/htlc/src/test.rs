@@ -4,8 +4,8 @@ use std::println;
 
 use super::*;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger, Events},
-    token, Address, Env, Bytes,
+    testutils::{Address as _, Events, Ledger},
+    token, Address, Bytes, Env,
 };
 use token::Client as TokenClient;
 use token::StellarAssetClient as TokenAdminClient;
@@ -88,7 +88,7 @@ impl<'a> HTLCTest<'a> {
 #[test]
 fn test_create_swap() {
     let test = HTLCTest::setup();
-    
+
     test.contract.create_swap(
         &test.swap_id,
         &test.sender,
@@ -127,7 +127,7 @@ fn test_create_swap() {
 #[test]
 fn test_withdraw_success() {
     let test = HTLCTest::setup();
-    
+
     // Create the swap
     test.contract.create_swap(
         &test.swap_id,
@@ -140,7 +140,8 @@ fn test_withdraw_success() {
     );
 
     // Withdraw using the correct preimage
-    test.contract.withdraw(&test.swap_id, &test.recipient, &test.preimage);
+    test.contract
+        .withdraw(&test.swap_id, &test.recipient, &test.preimage);
 
     // Echo events
     test.echo_events("withdraw");
@@ -165,7 +166,7 @@ fn test_withdraw_success() {
 #[test]
 fn test_refund_success() {
     let test = HTLCTest::setup();
-    
+
     // Create the swap
     test.contract.create_swap(
         &test.swap_id,
@@ -208,7 +209,7 @@ fn test_refund_success() {
 #[should_panic(expected = "amount must be positive")]
 fn test_create_swap_invalid_amount() {
     let test = HTLCTest::setup();
-    
+
     test.contract.create_swap(
         &test.swap_id,
         &test.sender,
@@ -224,9 +225,9 @@ fn test_create_swap_invalid_amount() {
 #[should_panic(expected = "hashlock must be 32 bytes (SHA256)")]
 fn test_create_swap_invalid_hashlock() {
     let test = HTLCTest::setup();
-    
+
     let invalid_hashlock = Bytes::from_slice(&test.env, b"invalid_hash");
-    
+
     test.contract.create_swap(
         &test.swap_id,
         &test.sender,
@@ -242,7 +243,7 @@ fn test_create_swap_invalid_hashlock() {
 #[should_panic(expected = "timelock must be in the future")]
 fn test_create_swap_past_timelock() {
     let test = HTLCTest::setup();
-    
+
     test.contract.create_swap(
         &test.swap_id,
         &test.sender,
@@ -258,7 +259,7 @@ fn test_create_swap_past_timelock() {
 #[should_panic(expected = "swap_id already exists")]
 fn test_create_swap_duplicate_swap_id() {
     let test = HTLCTest::setup();
-    
+
     // Create first swap
     test.contract.create_swap(
         &test.swap_id,
@@ -286,7 +287,7 @@ fn test_create_swap_duplicate_swap_id() {
 #[should_panic(expected = "invalid preimage")]
 fn test_withdraw_invalid_preimage() {
     let test = HTLCTest::setup();
-    
+
     // Create the swap
     test.contract.create_swap(
         &test.swap_id,
@@ -300,7 +301,8 @@ fn test_withdraw_invalid_preimage() {
 
     // Try to withdraw with wrong preimage
     let wrong_preimage = Bytes::from_slice(&test.env, b"wrong_preimage");
-    test.contract.withdraw(&test.swap_id, &test.recipient, &wrong_preimage);
+    test.contract
+        .withdraw(&test.swap_id, &test.recipient, &wrong_preimage);
 }
 
 #[test]
@@ -308,7 +310,7 @@ fn test_withdraw_invalid_preimage() {
 fn test_withdraw_unauthorized_recipient() {
     let test = HTLCTest::setup();
     let unauthorized_recipient = Address::generate(&test.env);
-    
+
     // Create the swap
     test.contract.create_swap(
         &test.swap_id,
@@ -321,14 +323,15 @@ fn test_withdraw_unauthorized_recipient() {
     );
 
     // Try to withdraw with unauthorized recipient
-    test.contract.withdraw(&test.swap_id, &unauthorized_recipient, &test.preimage);
+    test.contract
+        .withdraw(&test.swap_id, &unauthorized_recipient, &test.preimage);
 }
 
 #[test]
 #[should_panic(expected = "timelock expired")]
 fn test_withdraw_after_timelock() {
     let test = HTLCTest::setup();
-    
+
     // Create the swap
     test.contract.create_swap(
         &test.swap_id,
@@ -346,14 +349,15 @@ fn test_withdraw_after_timelock() {
     });
 
     // Try to withdraw after timelock expired
-    test.contract.withdraw(&test.swap_id, &test.recipient, &test.preimage);
+    test.contract
+        .withdraw(&test.swap_id, &test.recipient, &test.preimage);
 }
 
 #[test]
 #[should_panic(expected = "timelock not expired yet")]
 fn test_refund_before_timelock() {
     let test = HTLCTest::setup();
-    
+
     // Create the swap
     test.contract.create_swap(
         &test.swap_id,
@@ -374,7 +378,7 @@ fn test_refund_before_timelock() {
 fn test_refund_unauthorized_sender() {
     let test = HTLCTest::setup();
     let unauthorized_sender = Address::generate(&test.env);
-    
+
     // Create the swap
     test.contract.create_swap(
         &test.swap_id,
@@ -399,7 +403,7 @@ fn test_refund_unauthorized_sender() {
 #[should_panic(expected = "swap already withdrawn")]
 fn test_double_withdraw() {
     let test = HTLCTest::setup();
-    
+
     // Create the swap
     test.contract.create_swap(
         &test.swap_id,
@@ -412,17 +416,19 @@ fn test_double_withdraw() {
     );
 
     // Withdraw successfully
-    test.contract.withdraw(&test.swap_id, &test.recipient, &test.preimage);
-    
+    test.contract
+        .withdraw(&test.swap_id, &test.recipient, &test.preimage);
+
     // Try to withdraw again
-    test.contract.withdraw(&test.swap_id, &test.recipient, &test.preimage);
+    test.contract
+        .withdraw(&test.swap_id, &test.recipient, &test.preimage);
 }
 
 #[test]
 #[should_panic(expected = "swap already refunded")]
 fn test_double_refund() {
     let test = HTLCTest::setup();
-    
+
     // Create the swap
     test.contract.create_swap(
         &test.swap_id,
@@ -441,7 +447,7 @@ fn test_double_refund() {
 
     // Refund successfully
     test.contract.refund(&test.swap_id, &test.sender);
-    
+
     // Try to refund again
     test.contract.refund(&test.swap_id, &test.sender);
 }
@@ -449,7 +455,7 @@ fn test_double_refund() {
 #[test]
 fn test_verify_preimage() {
     let test = HTLCTest::setup();
-    
+
     // Create the swap
     test.contract.create_swap(
         &test.swap_id,
@@ -463,16 +469,18 @@ fn test_verify_preimage() {
 
     // Verify correct preimage
     assert!(test.contract.verify_preimage(&test.swap_id, &test.preimage));
-    
+
     // Verify incorrect preimage
     let wrong_preimage = Bytes::from_slice(&test.env, b"wrong_preimage");
-    assert!(!test.contract.verify_preimage(&test.swap_id, &wrong_preimage));
+    assert!(!test
+        .contract
+        .verify_preimage(&test.swap_id, &wrong_preimage));
 }
 
 #[test]
 fn test_get_swap_none() {
     let test = HTLCTest::setup();
-    
+
     // No swap created yet
     let swap = test.contract.get_swap(&test.swap_id);
     assert!(swap.is_none());
@@ -481,10 +489,10 @@ fn test_get_swap_none() {
 #[test]
 fn test_swap_exists() {
     let test = HTLCTest::setup();
-    
+
     // No swap created yet
     assert!(!test.contract.swap_exists(&test.swap_id));
-    
+
     // Create the swap
     test.contract.create_swap(
         &test.swap_id,
@@ -495,7 +503,7 @@ fn test_swap_exists() {
         &test.hashlock,
         &12350,
     );
-    
+
     // Swap should exist now
     assert!(test.contract.swap_exists(&test.swap_id));
 }
@@ -503,7 +511,7 @@ fn test_swap_exists() {
 #[test]
 fn test_multiple_swaps() {
     let test = HTLCTest::setup();
-    
+
     // Create first swap
     test.contract.create_swap(
         &test.swap_id,
@@ -514,7 +522,7 @@ fn test_multiple_swaps() {
         &test.hashlock,
         &12350,
     );
-    
+
     // Create second swap with different swap_id
     let swap_id_2 = Bytes::from_slice(&test.env, b"test_swap_002");
     test.contract.create_swap(
@@ -526,21 +534,22 @@ fn test_multiple_swaps() {
         &test.hashlock,
         &12350,
     );
-    
+
     // Verify both swaps exist
     assert!(test.contract.swap_exists(&test.swap_id));
     assert!(test.contract.swap_exists(&swap_id_2));
-    
+
     // Verify they are independent
     let swap1 = test.contract.get_swap(&test.swap_id).unwrap();
     let swap2 = test.contract.get_swap(&swap_id_2).unwrap();
-    
+
     assert_eq!(swap1.amount, 400);
     assert_eq!(swap2.amount, 300);
-    
+
     // Withdraw first swap
-    test.contract.withdraw(&test.swap_id, &test.recipient, &test.preimage);
-    
+    test.contract
+        .withdraw(&test.swap_id, &test.recipient, &test.preimage);
+
     // Second swap should still be available
     assert!(test.contract.swap_exists(&swap_id_2));
     let swap2_after = test.contract.get_swap(&swap_id_2).unwrap();
