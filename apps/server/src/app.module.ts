@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { ConfigModule } from './shared/config.module';
 import { ResolverModule } from './modules/resolver/resolver.module';
 import { IntentModule } from './modules/intent/intent.module';
@@ -11,7 +9,7 @@ import { IntentModule } from './modules/intent/intent.module';
     ResolverModule,
     IntentModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [],
+  providers: [],
 })
 export class AppModule {}

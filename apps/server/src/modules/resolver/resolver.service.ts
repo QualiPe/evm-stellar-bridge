@@ -63,8 +63,7 @@ export class ResolverService {
     } catch { return undefined; }
   }
 
-  private async strictSend(sourceAsset: { code: string; issuer?: string }, sourceAmount: string,
-                           destAsset: { code: string; issuer?: string }) {
+  private async strictSend(sourceAsset: { code: string; issuer?: string }, sourceAmount: string, destAsset: { code: string; issuer?: string }) {
     try {
       const url = new URL(`${env.HORIZON_URL}/paths/strict-send`);
       url.searchParams.set('source_amount', sourceAmount);

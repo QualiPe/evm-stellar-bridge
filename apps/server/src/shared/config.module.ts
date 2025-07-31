@@ -1,5 +1,11 @@
 import { Module } from '@nestjs/common';
 import { z } from 'zod';
+import { config as dotenvConfig } from 'dotenv';
+import { resolve } from 'node:path';
+
+dotenvConfig({
+    path: resolve(process.cwd(), '.env'),
+});
 
 export const EnvSchema = z.object({
   PORT: z.coerce.number().default(3000),
