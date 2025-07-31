@@ -6,3 +6,16 @@ pnpm-lock.yaml
 target
 artifacts
 cache
+
+# Rust's output directory
+target
+
+# Local settings
+.soroban
+.stellar
+
+# Tests
+test_snapshots
+
+# MacOS
+.DS_Store
