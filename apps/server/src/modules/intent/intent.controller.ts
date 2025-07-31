@@ -30,9 +30,9 @@ export class IntentController {
           summary: 'Stellar → EVM (USDC → WETH)',
           value: {
             direction: 'STELLAR_TO_EVM',
-            fromToken: 'USDC:GA...ISSUER',
+            fromToken: 'XLM',
             toToken: '0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2',
-            amountIn: '25.0',
+            amountIn: '25',
             toAddress: 'GCFX...DEST',
           },
         },

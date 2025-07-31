@@ -1,3 +1,18 @@
+const EVM_DECIMALS: Record<string, number> = {
+  // normalized to lowercase
+  ['0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'.toLowerCase()]: 6,  // USDC
+  ['0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2'.toLowerCase()]: 18, // WETH
+};
+
+function evmDecimals(addr: string | undefined, def = 18): number {
+  if (!addr) return def;
+  return EVM_DECIMALS[addr.toLowerCase()] ?? def;
+}
+
+function extractOneInchToAmount(data: any): string | undefined {
+  if (!data) return undefined;
+  return data.toAmount || data.dstAmount || data.toTokenAmount;
+}
 import { Injectable } from '@nestjs/common';
 import { ENV as env } from '../../shared/config.module';
 import { oneInch, horizon } from './clients';
@@ -13,14 +28,20 @@ export class ResolverService {
 
     if (input.direction === 'EVM_TO_STELLAR') {
       // (EVM) 1inch: fromToken -> USDC
-      const amountMinor = humanToMinor(input.amountIn, 18);
+      const amountMinor = humanToMinor(input.amountIn, evmDecimals(input.fromToken, 18));
       const q = await this.oneInchQuote(input.fromToken, USDC_EVM_MAINNET, amountMinor);
-      const outUsdcMinor = q?.toAmount ?? '0';
+      const outUsdcMinor = extractOneInchToAmount(q) ?? '0';
+      if (outUsdcMinor === '0') {
+        console.warn('[resolver] 1inch quote returned zero toAmount; check API key or token decimals.');
+      }
       const outUsdcHuman = minorToHuman(outUsdcMinor, 6);
 
       // (Stellar) Horizon strict-send: USDC -> toAsset
       const dest = parseStellarAsset(input.toToken);
       const hp = await this.strictSend({ code: 'USDC', issuer: env.STELLAR_USDC_ISSUER }, outUsdcHuman, dest);
+      if (!hp?.destAmount) {
+        console.warn('[resolver] Horizon returned no path; consider mainnet issuer or add liquidity.');
+      }
 
       return {
         hash: '0x',
@@ -40,15 +61,18 @@ export class ResolverService {
       const outUsdcMinor = humanToMinor(outUsdcHuman, 6);
 
       const q = await this.oneInchQuote(USDC_EVM_MAINNET, input.toToken, outUsdcMinor);
-
+      if (!hp?.destAmount) {
+        // eslint-disable-next-line no-console
+        console.warn('[resolver] Horizon returned no path; consider mainnet issuer or add liquidity.');
+      }
       return {
         hash: '0x',
         timelocks,
         minLock: {
           stellar: applyHaircutHuman(outUsdcHuman, bps),
-          evm: applyHaircutHuman(minorToHuman(q?.toAmount ?? '0', 18), bps),
+          evm: applyHaircutHuman(minorToHuman(extractOneInchToAmount(q) ?? '0', 18), bps),
         },
-        evmLeg: { via: '1inch', from: 'USDC', to: input.toToken, toAmountMinor: q?.toAmount, raw: q },
+        evmLeg: { via: '1inch', from: 'USDC', to: input.toToken, toAmountMinor: extractOneInchToAmount(q), raw: q },
         stellarLeg: { via: 'strict-send', destAmount: outUsdcHuman, path: hp?.path, raw: hp },
       };
     }
@@ -63,30 +87,34 @@ export class ResolverService {
     } catch { return undefined; }
   }
 
-  private async strictSend(sourceAsset: { code: string; issuer?: string }, sourceAmount: string, destAsset: { code: string; issuer?: string }) {
+  private async strictSend(
+    sourceAsset: { code: string; issuer?: string },
+    sourceAmount: string,
+    destAsset: { code: string; issuer?: string },
+  ) {
     try {
-      const url = new URL(`${env.HORIZON_URL}/paths/strict-send`);
-      url.searchParams.set('source_amount', sourceAmount);
+      const params: Record<string, string> = {
+        source_amount: sourceAmount,
+        source_asset_type: sourceAsset.code === 'XLM' ? 'native' : 'credit_alphanum4',
+      };
 
-      if (sourceAsset.code === 'XLM') {
-        url.searchParams.set('source_asset_type', 'native');
-      } else {
-        url.searchParams.set('source_asset_type', 'credit_alphanum4');
-        url.searchParams.set('source_asset_code', sourceAsset.code);
-        url.searchParams.set('source_asset_issuer', sourceAsset.issuer!);
+      if (sourceAsset.code !== 'XLM') {
+        params.source_asset_code = sourceAsset.code;
+        params.source_asset_issuer = sourceAsset.issuer!;
       }
 
-      if (destAsset.code === 'XLM') {
-        url.searchParams.set('destination_asset_type', 'native');
-      } else {
-        url.searchParams.set('destination_asset_type', 'credit_alphanum4');
-        url.searchParams.set('destination_asset_code', destAsset.code);
-        url.searchParams.set('destination_asset_issuer', destAsset.issuer!);
-      }
+      // IMPORTANT: strict-send expects `destination_assets` (comma-separated list)
+      params.destination_assets =
+        destAsset.code === 'XLM' ? 'native' : `${destAsset.code}:${destAsset.issuer}`;
 
-      const { data } = await horizon.get(url.toString().replace(env.HORIZON_URL, ''));
+      const { data } = await horizon.get('/paths/strict-send', { params });
       const best = data?._embedded?.records?.[0];
-      return best ? { destAmount: best.destination_amount, path: best.path, raw: best } : undefined;
-    } catch { return undefined; }
+      if (!best) return undefined;
+      return { destAmount: best.destination_amount, path: best.path, raw: best };
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[resolver] strict-send failed', (e as any)?.message ?? e);
+      return undefined;
+    }
   }
 }
