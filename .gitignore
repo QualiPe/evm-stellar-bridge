@@ -1,8 +1,8 @@
 node_modules
 dist
 .env
-.env.*
 pnpm-lock.yaml
 target
 artifacts
 cache
+.DS_Store

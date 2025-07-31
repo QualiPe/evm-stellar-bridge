@@ -8,7 +8,7 @@
     "server": "pnpm --filter server start:dev",
     "contracts:evm:compile": "pnpm --filter ./contracts/evm hardhat compile",
     "contracts:stellar:build": "cd contracts/stellar/htlc-contract && cargo build",
-    "dev": "pnpm run server & pnpm run client"
+    "dev": "pnpm --filter server start:dev & pnpm --filter client dev"
   },
   "keywords": [],
   "author": "",
