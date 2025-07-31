@@ -1,21 +1,32 @@
-# Soroban Project
+# HTLC Contract Soroban
 
-## Project Structure
+## How to build bindings
 
-This repository uses the recommended structure for a Soroban project:
-```text
-.
-├── contracts
-│   └── hello_world
-│       ├── src
-│       │   ├── lib.rs
-│       │   └── test.rs
-│       └── Cargo.toml
-├── Cargo.toml
-└── README.md
-```
+1. Install Rust and Soroban CLI
+    https://developers.stellar.org/docs/tools/cli/install-cli
 
-- New Soroban contracts can be put in `contracts`, each in their own directory. There is already a `hello_world` contract in there to get you started.
-- If you initialized this project with any other example contracts via `--with-example`, those contracts will be in the `contracts` directory as well.
-- Contracts should have their own `Cargo.toml` files that rely on the top-level `Cargo.toml` workspace for their dependencies.
-- Frontend libraries can be added to the top-level directory as well. If you initialized this project with a frontend template via `--frontend-template` you will have those files already included.
+2. Build the contract
+    ```bash
+    make build
+    ```
+
+3. Generate the bindings
+    ```bash
+    make bindings
+    ```
+
+## How to publish
+
+1. Prepare the package (happens automatically when you run `make bindings`)
+    ```bash
+    make package:prepare
+    ```
+
+2. Publish the package
+    ```bash
+    make package:publish
+    ```
+
+## Version update 
+
+To update package version of `@QualiPe/htlc-contract` you can use `packageVersions` in `package.json` of the `/contracts/stellar` directory.
