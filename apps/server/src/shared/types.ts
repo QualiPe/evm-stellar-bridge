@@ -11,11 +11,12 @@ export type IntentStatus =
   | 'error';
 
 export interface CreateIntentInput {
-  fromChainId: number;
-  fromToken: string;
-  toToken: string;
-  amountIn: string;
-  toAddress: string;
+    direction: Direction;
+    fromChainId: number;
+    fromToken: string;
+    toToken: string;
+    amountIn: string;
+    toAddress: string;
 }
 
 export interface LegEvm {
