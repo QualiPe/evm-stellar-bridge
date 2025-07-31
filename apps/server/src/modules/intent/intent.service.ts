@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes, createHash } from 'crypto';
 import { ResolverService } from '../resolver/resolver.service';
-import { CreateIntentInput, Intent, IntentStatus } from '../../shared/types';
+import {
+  CreateIntentInput,
+  Intent,
+  IntentStatus,
+  IntentRequestEcho,
+} from '../../shared/types';
 
 type Store = Map<string, Intent & { preimage?: string }>;
 const store: Store = new Map();
@@ -17,8 +22,21 @@ export class IntentService {
     const plan = await this.resolver.buildPlan(input);
     plan.hash = hash as `0x${string}`;
 
+    const request: IntentRequestEcho = {
+      direction: input.direction,
+      mode: input.mode ?? 'EXACT_IN',
+      fromChainId: input.fromChainId,
+      fromToken: input.fromToken,
+      toToken: input.toToken,
+      toAddress: input.toAddress,
+      amountIn: input.amountIn,
+      amountOut: input.amountOut,
+      createdAt: new Date().toISOString(),
+    };
+
     const id = randomBytes(9).toString('hex');
-    const intent: Intent = { id, status: 'created', plan, tx: {} };
+    const intent: Intent = { id, status: 'created', plan, tx: {}, request };
+
     store.set(id, { ...intent, preimage: '0x' + preimage.toString('hex') });
     return intent;
   }
@@ -30,7 +48,7 @@ export class IntentService {
     return rest;
   }
 
-  patchStatus(id: string, status: IntentStatus, tx?: Record<string,string>) {
+  patchStatus(id: string, status: IntentStatus, tx?: Record<string, string>) {
     const i = store.get(id);
     if (!i) return null;
     i.status = status;

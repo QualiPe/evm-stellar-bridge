@@ -21,3 +21,9 @@ export function applyHaircutHuman(human: string, bps: number): string {
     const f = s.slice(-18).replace(/0+$/, '');
     return f ? `${i}.${f}` : i;
 }
+
+export function applyHaircutUpHuman(human: string, bps: number): string {
+    const x = Number(human || '0');
+    const res = x * (10000 + (bps || 0)) / 10000;
+    return res.toString();
+  }

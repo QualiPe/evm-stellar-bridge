@@ -16,23 +16,46 @@ export class IntentController {
       type: CreateIntentDto,
       examples: {
         evmToStellar: {
-          summary: 'EVM → Stellar (WETH → XLM)',
+          summary: 'EVM → Stellar (EXACT_IN: WETH → XLM)',
           value: {
             direction: 'EVM_TO_STELLAR',
-            fromChainId: 11155111,
+            fromChainId: 1,
             fromToken: '0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2',
             toToken: 'XLM',
             amountIn: '0.01',
             toAddress: 'GCFX...DEST',
           },
         },
+        evmToStellarExactOut: {
+          summary: 'EVM → Stellar (EXACT_OUT: WETH → XLM)',
+          value: {
+            direction: 'EVM_TO_STELLAR',
+            mode: 'EXACT_OUT',
+            fromChainId: 1,
+            fromToken: '0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2',
+            toToken: 'XLM',
+            amountOut: '100',
+            toAddress: 'GCFX...DEST',
+          },
+        },
         stellarToEvm: {
-          summary: 'Stellar → EVM (USDC → WETH)',
+          summary: 'Stellar → EVM (EXACT_IN: XLM → WETH)',
           value: {
             direction: 'STELLAR_TO_EVM',
             fromToken: 'XLM',
             toToken: '0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2',
             amountIn: '25',
+            toAddress: 'GCFX...DEST',
+          },
+        },
+        stellarToEvmExactOut: {
+          summary: 'Stellar → EVM (EXACT_OUT: XLM → WETH)',
+          value: {
+            direction: 'STELLAR_TO_EVM',
+            mode: 'EXACT_OUT',
+            fromToken: 'XLM',
+            toToken: '0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2',
+            amountOut: '0.01',
             toAddress: 'GCFX...DEST',
           },
         },

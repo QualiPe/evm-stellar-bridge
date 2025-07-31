@@ -1,60 +1,41 @@
-import { IsIn, IsOptional, IsInt, Min, IsString } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import type { CreateIntentInput, Direction } from '../../shared/types';
+import { IsIn, IsOptional, IsInt, Min, IsString, ValidateIf } from 'class-validator';
 
-export class CreateIntentDto implements CreateIntentInput {
-  @ApiProperty({
-    description: 'Swap direction',
-    enum: ['EVM_TO_STELLAR', 'STELLAR_TO_EVM'],
-    example: 'EVM_TO_STELLAR',
-  })
+export class CreateIntentDto {
+  @ApiProperty({ enum: ['EVM_TO_STELLAR', 'STELLAR_TO_EVM'] })
   @IsIn(['EVM_TO_STELLAR', 'STELLAR_TO_EVM'])
-  direction!: Direction;
+  direction!: 'EVM_TO_STELLAR' | 'STELLAR_TO_EVM';
 
-  @ApiPropertyOptional({
-    description: 'EVM chainId (e.g., Sepolia = 11155111). Optional for STELLAR_TO_EVM',
-    example: 11155111,
-  })
+  @ApiPropertyOptional({ description: 'Amount mode (default: EXACT_IN)', enum: ['EXACT_IN', 'EXACT_OUT'], default: 'EXACT_IN' })
+  @IsOptional()
+  @IsIn(['EXACT_IN', 'EXACT_OUT'])
+  mode?: 'EXACT_IN' | 'EXACT_OUT';
+
+  @ApiPropertyOptional({ example: 1 })
   @IsOptional()
   @IsInt()
   @Min(1)
   fromChainId?: number;
 
-  @ApiProperty({
-    description:
-      'For EVM→Stellar: EVM token address (0x...). For Stellar→EVM: "XLM" or "CODE:ISSUER".',
-    examples: {
-      evm: { summary: 'EVM token', value: '0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2' },
-      stellarNative: { summary: 'Stellar native', value: 'XLM' },
-      stellarAsset: { summary: 'Stellar issued asset', value: 'USDC:GA...ISSUER' },
-    },
-  })
+  @ApiProperty({ example: '0xC02a...WETH or XLM or USDC:GA5Z...' })
   @IsString()
   fromToken!: string;
 
-  @ApiProperty({
-    description:
-      'Target token/asset on destination chain: EVM 0x... or Stellar "XLM"/"CODE:ISSUER".',
-    examples: {
-      toXlm: { value: 'XLM' },
-      toEvm: { value: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' },
-      toIssued: { value: 'USDC:GA...ISSUER' },
-    },
-  })
+  @ApiProperty({ example: 'XLM or 0xC02a...WETH or USDC:GA5Z...' })
   @IsString()
   toToken!: string;
 
-  @ApiProperty({
-    description: 'Human amount',
-    example: '1.0',
-  })
-  @IsString()
-  amountIn!: string;
-
-  @ApiProperty({
-    description: 'Stellar G-address of beneficiary (used when destination is Stellar).',
-    example: 'GCFX...DESTINATION',
-  })
+  @ApiProperty({ example: 'G... or 0x...' })
   @IsString()
   toAddress!: string;
+
+  @ApiPropertyOptional({ description: 'Human amount (required when mode = EXACT_IN)', example: '0.01' })
+  @ValidateIf((o) => o.mode !== 'EXACT_OUT')
+  @IsString()
+  amountIn?: string;
+
+  @ApiPropertyOptional({ description: 'Desired output amount (required when mode = EXACT_OUT)', example: '25' })
+  @ValidateIf((o) => o.mode === 'EXACT_OUT')
+  @IsString()
+  amountOut?: string;
 }
