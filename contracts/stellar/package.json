@@ -18,5 +18,8 @@
   "scripts": {
     "package:prepare": "pnpx tsx scripts/prepare-package.ts",
     "package:publish": "pnpx tsx scripts/publish-package.ts"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^13.3.0"
   }
 }

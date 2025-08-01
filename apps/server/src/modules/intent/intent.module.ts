@@ -6,6 +6,7 @@ import { ResolverModule } from '../resolver/resolver.module';
 @Module({ 
     imports: [ResolverModule], 
     providers: [IntentService], 
-    controllers: [IntentController] 
+    controllers: [IntentController],
+    exports: [IntentService]
 })
 export class IntentModule {}

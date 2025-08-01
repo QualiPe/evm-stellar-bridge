@@ -90,4 +90,15 @@ export class IntentController {
       if (!i) throw new NotFoundException('Intent not found');
       return i;
     }
+
+    @Get(':id/preimage')
+    @ApiOperation({ summary: 'Get intent preimage (for testing/relayer)' })
+    @ApiParam({ name: 'id', example: 'e3f4c9a1b2' })
+    @ApiOkResponse({ description: 'Intent with preimage' })
+    @ApiNotFoundResponse({ description: 'Intent not found' })
+    getPreimage(@Param('id') id: string) {
+      const i = this.svc.getWithPreimage(id);
+      if (!i) throw new NotFoundException('Intent not found');
+      return { preimage: i.preimage };
+    }
 }

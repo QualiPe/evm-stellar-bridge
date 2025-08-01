@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ENV as env } from '../../shared/config.module';
 import { oneInch, horizon } from './clients';
 import { CreateIntentInput, IntentPlan } from '../../shared/types';
-import { USDC_EVM_MAINNET, parseStellarAsset } from '../../shared/constants';
+import { USDC_ADDRESSES, parseStellarAsset } from '../../shared/constants';
 import { humanToMinor, minorToHuman, applyHaircutHuman, applyHaircutUpHuman } from '../../shared/amount';
 
 const EVM_DECIMALS: Record<string, number> = {
@@ -22,6 +22,20 @@ function extractOneInchToAmount(data: any): string | undefined {
 
 @Injectable()
 export class ResolverService {
+  // Development flag to bypass 1inch integration
+  private readonly BYPASS_1INCH = true;
+
+  private getUsdcAddress(): string {
+    const chainId = Number(env.ONEINCH_CHAIN_FOR_QUOTES);
+    switch (chainId) {
+      case 1: // Mainnet
+        return USDC_ADDRESSES.mainnet;
+      case 11155111: // Sepolia
+        return USDC_ADDRESSES.sepolia;
+      default:
+        throw new Error(`Unsupported chain ID for 1inch quotes: ${chainId}`);
+    }
+  }
   async buildPlan(input: CreateIntentInput): Promise<IntentPlan> {
     const timelocks = { ethSec: 60 * 60, stellarSec: 40 * 60 };
     const bps = env.MIN_HAIRCUT_BPS;
@@ -32,11 +46,24 @@ export class ResolverService {
       if (mode === 'EXACT_IN') {
         if (!input.amountIn) throw new Error('amountIn is required when mode = EXACT_IN');
 
-        // 1) EVM: WETH -> USDC
+        // 1) EVM: WETH -> USDC (with bypass option)
         const amountMinor = humanToMinor(input.amountIn!, evmDecimals(input.fromToken, 18));
-        const q = await this.oneInchQuote(input.fromToken, USDC_EVM_MAINNET, amountMinor);
-        const outUsdcMinor = extractOneInchToAmount(q)!;
-        const outUsdcHuman = minorToHuman(outUsdcMinor, 6);
+        let outUsdcMinor: string;
+        let outUsdcHuman: string;
+        let q: any;
+
+        if (this.BYPASS_1INCH) {
+          // Bypass 1inch for development
+          outUsdcMinor = amountMinor;
+          outUsdcHuman = input.amountIn!;
+          q = { bypass: true, toAmount: outUsdcMinor };
+        } else {
+          // Use 1inch for production
+          const usdcAddress = this.getUsdcAddress();
+          q = await this.oneInchQuote(input.fromToken, usdcAddress, amountMinor);
+          outUsdcMinor = extractOneInchToAmount(q)!;
+          outUsdcHuman = minorToHuman(outUsdcMinor, 6);
+        }
 
         // 2) Stellar: USDC -> XLM (for UI preview)
         const dest = parseStellarAsset(input.toToken); // e.g. XLM
@@ -68,7 +95,7 @@ export class ResolverService {
         if (!input.amountOut) throw new Error('amountOut is required when mode = EXACT_OUT');
 
         const dest = parseStellarAsset(input.toToken); // e.g. XLM
-        // 1) How much USDC on Stellar needed to deliver amountOut?
+        // How much USDC on Stellar needed to deliver amountOut?
         let usdcOnStellarHuman = '0';
         if (dest.code === 'USDC' && dest.issuer === env.STELLAR_USDC_ISSUER) {
           usdcOnStellarHuman = applyHaircutUpHuman(input.amountOut, bps);
@@ -80,8 +107,19 @@ export class ResolverService {
 
         // 2) How much WETH on EVM needed to get that many USDC?
         const targetUsdcMinor = humanToMinor(usdcOnStellarHuman, 6);
-        const needInMinor = await this.oneInchFindAmountIn(input.fromToken, USDC_EVM_MAINNET, targetUsdcMinor);
-        const needInHuman = minorToHuman(needInMinor, evmDecimals(input.fromToken, 18));
+        let needInMinor: string;
+        let needInHuman: string;
+
+        if (this.BYPASS_1INCH) {
+          // Bypass 1inch for development
+          needInMinor = targetUsdcMinor;
+          needInHuman = usdcOnStellarHuman;
+        } else {
+          // Use 1inch for production
+          const usdcAddress = this.getUsdcAddress();
+          needInMinor = await this.oneInchFindAmountIn(input.fromToken, usdcAddress, targetUsdcMinor);
+          needInHuman = minorToHuman(needInMinor, evmDecimals(input.fromToken, 18));
+        }
 
         const minLockUsdc = usdcOnStellarHuman; // haircut-up already applied
 
@@ -118,7 +156,15 @@ export class ResolverService {
         const outUsdcMinor = humanToMinor(outUsdcHuman, 6);
 
         // 2) EVM: USDC -> WETH (for UI preview)
-        const q = await this.oneInchQuote(USDC_EVM_MAINNET, input.toToken, outUsdcMinor);
+        let q: any;
+        if (this.BYPASS_1INCH) {
+          // Bypass 1inch for development
+          q = { bypass: true, toAmount: outUsdcMinor };
+        } else {
+          // Use 1inch for production
+          const usdcAddress = this.getUsdcAddress();
+          q = await this.oneInchQuote(usdcAddress, input.toToken, outUsdcMinor);
+        }
 
         // 3) Locks — always USDC on both legs
         const minLockUsdc = applyHaircutHuman(outUsdcHuman, bps);
@@ -147,7 +193,15 @@ export class ResolverService {
 
         // 1) EVM: how many tokens are required to get amountOut WETH
         const outMinor = humanToMinor(input.amountOut, evmDecimals(input.toToken, 18));
-        const needUsdcMinor = await this.oneInchFindAmountIn(USDC_EVM_MAINNET, input.toToken, outMinor);
+        let needUsdcMinor: string;
+        if (this.BYPASS_1INCH) {
+          // Bypass 1inch for development
+          needUsdcMinor = outMinor;
+        } else {
+          // Use 1inch for production
+          const usdcAddress = this.getUsdcAddress();
+          needUsdcMinor = await this.oneInchFindAmountIn(usdcAddress, input.toToken, outMinor);
+        }
         const needUsdcHuman = minorToHuman(needUsdcMinor, 6);
 
         // 2) Locks — haircut-up on both legs

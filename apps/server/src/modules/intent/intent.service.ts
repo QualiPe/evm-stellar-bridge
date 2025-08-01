@@ -57,4 +57,53 @@ export class IntentService {
     const { preimage, ...rest } = i;
     return rest;
   }
+
+  /**
+   * Get intent with preimage (for relayer use)
+   */
+  getWithPreimage(id: string): (Intent & { preimage?: string }) | null {
+    return store.get(id) || null;
+  }
+
+  /**
+   * Get all active intents
+   */
+  getActiveIntents(): Intent[] {
+    const activeStatuses: IntentStatus[] = ['created', 'evm_locked', 'stellar_locked', 'withdrawn_stellar', 'withdrawn_evm'];
+    const activeIntents: Intent[] = [];
+    
+    for (const [id, intent] of store.entries()) {
+      if (activeStatuses.includes(intent.status)) {
+        const { preimage, ...intentWithoutPreimage } = intent;
+        activeIntents.push(intentWithoutPreimage);
+      }
+    }
+    
+    return activeIntents;
+  }
+
+  /**
+   * Find intent by hashlock
+   */
+  findByHashlock(hashlock: string): Intent | null {
+    for (const [id, intent] of store.entries()) {
+      if (intent.plan.hash === hashlock) {
+        const { preimage, ...intentWithoutPreimage } = intent;
+        return intentWithoutPreimage;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Get all intents (for debugging)
+   */
+  getAllIntents(): Intent[] {
+    const intents: Intent[] = [];
+    for (const [id, intent] of store.entries()) {
+      const { preimage, ...intentWithoutPreimage } = intent;
+      intents.push(intentWithoutPreimage);
+    }
+    return intents;
+  }
 }
