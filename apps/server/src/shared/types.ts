@@ -17,9 +17,9 @@ export interface CreateIntentInput {
   fromChainId?: number;
   fromToken: string;
   toToken: string;
-  amountIn?: string;    // required when mode !== 'EXACT_OUT'
-  amountOut?: string;   // required when mode === 'EXACT_OUT'
-  mode?: AmountMode;    // default: 'EXACT_IN'
+  amountIn?: string; // required when mode !== 'EXACT_OUT'
+  amountOut?: string; // required when mode === 'EXACT_OUT'
+  mode?: AmountMode; // default: 'EXACT_IN'
   toAddress: string;
 }
 
@@ -53,18 +53,28 @@ export interface IntentPlan {
 
   /** Optional helpers for UI / EXACT_OUT */
   mode?: AmountMode;
-  amountOut?: string;          // desired output (human) when mode = EXACT_OUT
-  amountInEstimated?: string;  // estimated input (human) when mode = EXACT_OUT
+  amountOut?: string; // desired output (human) when mode = EXACT_OUT
+  amountInEstimated?: string; // estimated input (human) when mode = EXACT_OUT
 
   /** Compact summary for UI to avoid client-side recalcs */
   summary?: {
     mode: AmountMode;
-    src: { chain: 'EVM' | 'Stellar'; token: string; decimals: number; amountHuman: string };
+    src: {
+      chain: 'EVM' | 'Stellar';
+      token: string;
+      decimals: number;
+      amountHuman: string;
+    };
     bridge: {
       evmUSDC: { human: string; minor?: string; decimals: number };
       stellarUSDC: { human: string; decimals: number };
     };
-    dst: { chain: 'EVM' | 'Stellar'; token: string; decimals: number; amountHuman: string };
+    dst: {
+      chain: 'EVM' | 'Stellar';
+      token: string;
+      decimals: number;
+      amountHuman: string;
+    };
     quoteTtlSec: number;
   };
 }

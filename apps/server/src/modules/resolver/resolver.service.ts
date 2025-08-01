@@ -3,10 +3,15 @@ import { ENV as env } from '../../shared/config.module';
 import { oneInch, horizon } from './clients';
 import { CreateIntentInput, IntentPlan } from '../../shared/types';
 import { USDC_ADDRESSES, parseStellarAsset } from '../../shared/constants';
-import { humanToMinor, minorToHuman, applyHaircutHuman, applyHaircutUpHuman } from '../../shared/amount';
+import {
+  humanToMinor,
+  minorToHuman,
+  applyHaircutHuman,
+  applyHaircutUpHuman,
+} from '../../shared/amount';
 
 const EVM_DECIMALS: Record<string, number> = {
-  ['0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'.toLowerCase()]: 6,  // USDC
+  ['0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'.toLowerCase()]: 6, // USDC
   ['0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2'.toLowerCase()]: 18, // WETH
 };
 
@@ -44,10 +49,14 @@ export class ResolverService {
 
     if (input.direction === 'EVM_TO_STELLAR') {
       if (mode === 'EXACT_IN') {
-        if (!input.amountIn) throw new Error('amountIn is required when mode = EXACT_IN');
+        if (!input.amountIn)
+          throw new Error('amountIn is required when mode = EXACT_IN');
 
         // 1) EVM: WETH -> USDC (with bypass option)
-        const amountMinor = humanToMinor(input.amountIn!, evmDecimals(input.fromToken, 18));
+        const amountMinor = humanToMinor(
+          input.amountIn,
+          evmDecimals(input.fromToken, 18),
+        );
         let outUsdcMinor: string;
         let outUsdcHuman: string;
         let q: any;
@@ -60,14 +69,22 @@ export class ResolverService {
         } else {
           // Use 1inch for production
           const usdcAddress = this.getUsdcAddress();
-          q = await this.oneInchQuote(input.fromToken, usdcAddress, amountMinor);
+          q = await this.oneInchQuote(
+            input.fromToken,
+            usdcAddress,
+            amountMinor,
+          );
           outUsdcMinor = extractOneInchToAmount(q)!;
           outUsdcHuman = minorToHuman(outUsdcMinor, 6);
         }
 
         // 2) Stellar: USDC -> XLM (for UI preview)
         const dest = parseStellarAsset(input.toToken); // e.g. XLM
-        const hp = await this.strictSend({ code: 'USDC', issuer: env.STELLAR_USDC_ISSUER }, outUsdcHuman, dest);
+        const hp = await this.strictSend(
+          { code: 'USDC', issuer: env.STELLAR_USDC_ISSUER },
+          outUsdcHuman,
+          dest,
+        );
 
         // 3) Locks — always USDC on both legs
         const minLockUsdc = applyHaircutHuman(outUsdcHuman, bps);
@@ -76,23 +93,49 @@ export class ResolverService {
           hash: '0x',
           timelocks,
           minLock: { evm: minLockUsdc, stellar: minLockUsdc },
-          evmLeg: { via: '1inch', from: input.fromToken, to: 'USDC', toAmountMinor: outUsdcMinor, raw: q },
-          stellarLeg: { via: 'strict-send', destAmount: hp?.destAmount, path: hp?.path, raw: hp },
+          evmLeg: {
+            via: '1inch',
+            from: input.fromToken,
+            to: 'USDC',
+            toAmountMinor: outUsdcMinor,
+            raw: q,
+          },
+          stellarLeg: {
+            via: 'strict-send',
+            destAmount: hp?.destAmount,
+            path: hp?.path,
+            raw: hp,
+          },
           mode,
           summary: {
             mode,
-            src: { chain: 'EVM', token: 'WETH', decimals: 18, amountHuman: input.amountIn },
+            src: {
+              chain: 'EVM',
+              token: 'WETH',
+              decimals: 18,
+              amountHuman: input.amountIn,
+            },
             bridge: {
-              evmUSDC: { human: outUsdcHuman, minor: outUsdcMinor, decimals: 6 },
+              evmUSDC: {
+                human: outUsdcHuman,
+                minor: outUsdcMinor,
+                decimals: 6,
+              },
               stellarUSDC: { human: outUsdcHuman, decimals: 7 },
             },
-            dst: { chain: 'Stellar', token: dest.code, decimals: dest.code === 'XLM' ? 7 : 7, amountHuman: hp?.destAmount ?? '0' },
+            dst: {
+              chain: 'Stellar',
+              token: dest.code,
+              decimals: dest.code === 'XLM' ? 7 : 7,
+              amountHuman: hp?.destAmount ?? '0',
+            },
             quoteTtlSec,
           },
         };
       } else {
         // EXACT_OUT: user specifies desired XLM on Stellar
-        if (!input.amountOut) throw new Error('amountOut is required when mode = EXACT_OUT');
+        if (!input.amountOut)
+          throw new Error('amountOut is required when mode = EXACT_OUT');
 
         const dest = parseStellarAsset(input.toToken); // e.g. XLM
         // How much USDC on Stellar needed to deliver amountOut?
@@ -100,8 +143,13 @@ export class ResolverService {
         if (dest.code === 'USDC' && dest.issuer === env.STELLAR_USDC_ISSUER) {
           usdcOnStellarHuman = applyHaircutUpHuman(input.amountOut, bps);
         } else {
-          const sr = await this.strictReceive(dest, input.amountOut, `USDC:${env.STELLAR_USDC_ISSUER}`);
-          if (!sr?.sourceAmount) throw new Error('Horizon returned no path for strict-receive');
+          const sr = await this.strictReceive(
+            dest,
+            input.amountOut,
+            `USDC:${env.STELLAR_USDC_ISSUER}`,
+          );
+          if (!sr?.sourceAmount)
+            throw new Error('Horizon returned no path for strict-receive');
           usdcOnStellarHuman = applyHaircutUpHuman(sr.sourceAmount, bps);
         }
 
@@ -117,8 +165,15 @@ export class ResolverService {
         } else {
           // Use 1inch for production
           const usdcAddress = this.getUsdcAddress();
-          needInMinor = await this.oneInchFindAmountIn(input.fromToken, usdcAddress, targetUsdcMinor);
-          needInHuman = minorToHuman(needInMinor, evmDecimals(input.fromToken, 18));
+          needInMinor = await this.oneInchFindAmountIn(
+            input.fromToken,
+            usdcAddress,
+            targetUsdcMinor,
+          );
+          needInHuman = minorToHuman(
+            needInMinor,
+            evmDecimals(input.fromToken, 18),
+          );
         }
 
         const minLockUsdc = usdcOnStellarHuman; // haircut-up already applied
@@ -127,19 +182,44 @@ export class ResolverService {
           hash: '0x',
           timelocks,
           minLock: { evm: minLockUsdc, stellar: minLockUsdc },
-          evmLeg: { via: '1inch', from: input.fromToken, to: 'USDC', toAmountMinor: targetUsdcMinor, raw: { target: true } },
-          stellarLeg: { via: 'strict-receive', sourceAmount: usdcOnStellarHuman, path: [], raw: { target: true } },
+          evmLeg: {
+            via: '1inch',
+            from: input.fromToken,
+            to: 'USDC',
+            toAmountMinor: targetUsdcMinor,
+            raw: { target: true },
+          },
+          stellarLeg: {
+            via: 'strict-receive',
+            sourceAmount: usdcOnStellarHuman,
+            path: [],
+            raw: { target: true },
+          },
           mode,
           amountOut: input.amountOut,
           amountInEstimated: needInHuman,
           summary: {
             mode,
-            src: { chain: 'EVM', token: 'WETH', decimals: 18, amountHuman: needInHuman },
+            src: {
+              chain: 'EVM',
+              token: 'WETH',
+              decimals: 18,
+              amountHuman: needInHuman,
+            },
             bridge: {
-              evmUSDC: { human: usdcOnStellarHuman, minor: targetUsdcMinor, decimals: 6 },
+              evmUSDC: {
+                human: usdcOnStellarHuman,
+                minor: targetUsdcMinor,
+                decimals: 6,
+              },
               stellarUSDC: { human: usdcOnStellarHuman, decimals: 7 },
             },
-            dst: { chain: 'Stellar', token: dest.code, decimals: dest.code === 'XLM' ? 7 : 7, amountHuman: input.amountOut },
+            dst: {
+              chain: 'Stellar',
+              token: dest.code,
+              decimals: dest.code === 'XLM' ? 7 : 7,
+              amountHuman: input.amountOut,
+            },
             quoteTtlSec,
           },
         };
@@ -147,11 +227,15 @@ export class ResolverService {
     } else {
       // ---------- STELLAR_TO_EVM ----------
       if (mode === 'EXACT_IN') {
-        if (!input.amountIn) throw new Error('amountIn is required when mode = EXACT_IN');
+        if (!input.amountIn)
+          throw new Error('amountIn is required when mode = EXACT_IN');
 
         // 1) Stellar: fromToken -> USDC (how many USDC we get)
         const src = parseStellarAsset(input.fromToken); // e.g. USDC:GA5Z...
-        const hp = await this.strictSend(src, input.amountIn!, { code: 'USDC', issuer: env.STELLAR_USDC_ISSUER });
+        const hp = await this.strictSend(src, input.amountIn, {
+          code: 'USDC',
+          issuer: env.STELLAR_USDC_ISSUER,
+        });
         const outUsdcHuman = hp?.destAmount ?? '0';
         const outUsdcMinor = humanToMinor(outUsdcHuman, 6);
 
@@ -173,26 +257,57 @@ export class ResolverService {
           hash: '0x',
           timelocks,
           minLock: { stellar: minLockUsdc, evm: minLockUsdc },
-          evmLeg: { via: '1inch', from: 'USDC', to: input.toToken, toAmountMinor: extractOneInchToAmount(q), raw: q },
-          stellarLeg: { via: 'strict-send', destAmount: outUsdcHuman, path: hp?.path, raw: hp },
+          evmLeg: {
+            via: '1inch',
+            from: 'USDC',
+            to: input.toToken,
+            toAmountMinor: extractOneInchToAmount(q),
+            raw: q,
+          },
+          stellarLeg: {
+            via: 'strict-send',
+            destAmount: outUsdcHuman,
+            path: hp?.path,
+            raw: hp,
+          },
           mode,
           summary: {
             mode,
-            src: { chain: 'Stellar', token: src.code, decimals: 7, amountHuman: input.amountIn },
+            src: {
+              chain: 'Stellar',
+              token: src.code,
+              decimals: 7,
+              amountHuman: input.amountIn,
+            },
             bridge: {
-              evmUSDC: { human: outUsdcHuman, minor: outUsdcMinor, decimals: 6 },
+              evmUSDC: {
+                human: outUsdcHuman,
+                minor: outUsdcMinor,
+                decimals: 6,
+              },
               stellarUSDC: { human: outUsdcHuman, decimals: 7 },
             },
-            dst: { chain: 'EVM', token: 'WETH', decimals: 18, amountHuman: extractOneInchToAmount(q) ? minorToHuman(extractOneInchToAmount(q)!, 18) : '0' },
+            dst: {
+              chain: 'EVM',
+              token: 'WETH',
+              decimals: 18,
+              amountHuman: extractOneInchToAmount(q)
+                ? minorToHuman(extractOneInchToAmount(q)!, 18)
+                : '0',
+            },
             quoteTtlSec,
           },
         };
       } else {
         // EXACT_OUT: user specifies desired WETH on EVM
-        if (!input.amountOut) throw new Error('amountOut is required when mode = EXACT_OUT');
+        if (!input.amountOut)
+          throw new Error('amountOut is required when mode = EXACT_OUT');
 
         // 1) EVM: how many tokens are required to get amountOut WETH
-        const outMinor = humanToMinor(input.amountOut, evmDecimals(input.toToken, 18));
+        const outMinor = humanToMinor(
+          input.amountOut,
+          evmDecimals(input.toToken, 18),
+        );
         let needUsdcMinor: string;
         if (this.BYPASS_1INCH) {
           // Bypass 1inch for development
@@ -200,38 +315,69 @@ export class ResolverService {
         } else {
           // Use 1inch for production
           const usdcAddress = this.getUsdcAddress();
-          needUsdcMinor = await this.oneInchFindAmountIn(usdcAddress, input.toToken, outMinor);
+          needUsdcMinor = await this.oneInchFindAmountIn(
+            usdcAddress,
+            input.toToken,
+            outMinor,
+          );
         }
         const needUsdcHuman = minorToHuman(needUsdcMinor, 6);
 
         // 2) Locks — haircut-up on both legs
         const minLockUsdc = applyHaircutUpHuman(needUsdcHuman, bps);
         const src = parseStellarAsset(input.fromToken);
-        const sourceCsv = src.code === 'XLM' ? 'native' : `${src.code}:${src.issuer}`;
+        const sourceCsv =
+          src.code === 'XLM' ? 'native' : `${src.code}:${src.issuer}`;
 
         const sr = await this.strictReceive(
           { code: 'USDC', issuer: env.STELLAR_USDC_ISSUER },
           minLockUsdc,
           sourceCsv,
         );
-        if (!sr?.sourceAmount) throw new Error('Horizon returned no path for strict-receive');
+        if (!sr?.sourceAmount)
+          throw new Error('Horizon returned no path for strict-receive');
 
         return {
           hash: '0x',
           timelocks,
           minLock: { stellar: minLockUsdc, evm: minLockUsdc },
-          evmLeg: { via: '1inch', from: 'USDC', to: input.toToken, toAmountMinor: outMinor, raw: { target: true } },
-          stellarLeg: { via: 'strict-receive', sourceAmount: sr.sourceAmount, path: sr.path, raw: sr },
+          evmLeg: {
+            via: '1inch',
+            from: 'USDC',
+            to: input.toToken,
+            toAmountMinor: outMinor,
+            raw: { target: true },
+          },
+          stellarLeg: {
+            via: 'strict-receive',
+            sourceAmount: sr.sourceAmount,
+            path: sr.path,
+            raw: sr,
+          },
           amountOut: input.amountOut,
           amountInEstimated: sr.sourceAmount,
           summary: {
             mode,
-            src: { chain: 'Stellar', token: src.code, decimals: 7, amountHuman: sr.sourceAmount },
+            src: {
+              chain: 'Stellar',
+              token: src.code,
+              decimals: 7,
+              amountHuman: sr.sourceAmount,
+            },
             bridge: {
-              evmUSDC:     { human: minLockUsdc, minor: needUsdcMinor, decimals: 6 },
+              evmUSDC: {
+                human: minLockUsdc,
+                minor: needUsdcMinor,
+                decimals: 6,
+              },
               stellarUSDC: { human: minLockUsdc, decimals: 7 },
             },
-            dst: { chain: 'EVM', token: 'WETH', decimals: 18, amountHuman: input.amountOut },
+            dst: {
+              chain: 'EVM',
+              token: 'WETH',
+              decimals: 18,
+              amountHuman: input.amountOut,
+            },
             quoteTtlSec,
           },
         };
@@ -251,7 +397,11 @@ export class ResolverService {
     } catch {
       // Legacy fallback
       const { data } = await oneInch.get('/quote', {
-        params: { fromTokenAddress: from, toTokenAddress: to, amount: amountMinor },
+        params: {
+          fromTokenAddress: from,
+          toTokenAddress: to,
+          amount: amountMinor,
+        },
       });
       const toAmt = extractOneInchToAmount(data);
       if (!toAmt || toAmt === '0') throw new Error('empty toAmount (legacy)');
@@ -267,8 +417,12 @@ export class ResolverService {
     try {
       const params: Record<string, string> = {
         source_amount: sourceAmount,
-        source_asset_type: sourceAsset.code === 'XLM' ? 'native' : 'credit_alphanum4',
-        destination_assets: destAsset.code === 'XLM' ? 'native' : `${destAsset.code}:${destAsset.issuer}`,
+        source_asset_type:
+          sourceAsset.code === 'XLM' ? 'native' : 'credit_alphanum4',
+        destination_assets:
+          destAsset.code === 'XLM'
+            ? 'native'
+            : `${destAsset.code}:${destAsset.issuer}`,
       };
       if (sourceAsset.code !== 'XLM') {
         params.source_asset_code = sourceAsset.code;
@@ -277,9 +431,13 @@ export class ResolverService {
       const { data } = await horizon.get('/paths/strict-send', { params });
       const best = data?._embedded?.records?.[0];
       if (!best) return undefined;
-      return { destAmount: best.destination_amount, path: best.path, raw: best };
+      return {
+        destAmount: best.destination_amount,
+        path: best.path,
+        raw: best,
+      };
     } catch (e) {
-      console.warn('[resolver] strict-send failed', (e as any)?.message ?? e);
+      console.warn('[resolver] strict-send failed', e?.message ?? e);
       return undefined;
     }
   }
@@ -290,7 +448,10 @@ export class ResolverService {
     sourceAssetsCsv: string,
   ) {
     try {
-      const params: Record<string, string> = { destination_amount: destAmount, source_assets: sourceAssetsCsv };
+      const params: Record<string, string> = {
+        destination_amount: destAmount,
+        source_assets: sourceAssetsCsv,
+      };
       if (destAsset.code === 'XLM') {
         params.destination_asset_type = 'native';
       } else {
@@ -303,7 +464,7 @@ export class ResolverService {
       if (!best) return undefined;
       return { sourceAmount: best.source_amount, path: best.path, raw: best };
     } catch (e) {
-      console.warn('[resolver] strict-receive failed', (e as any)?.message ?? e);
+      console.warn('[resolver] strict-receive failed', e?.message ?? e);
       return undefined;
     }
   }
@@ -326,7 +487,7 @@ export class ResolverService {
       const q = await this.oneInchQuote(from, to, high.toString());
       const out = extractOneInchToAmount(q);
       const outBI = out ? BigInt(out) : 0n;
-    
+
       if (outBI >= target) {
         covered = true;
         break;
@@ -334,7 +495,7 @@ export class ResolverService {
       low = high;
       high *= 2n;
     }
-    
+
     if (!covered) {
       throw new Error('1inch quote did not reach target within search bounds');
     }
@@ -349,7 +510,9 @@ export class ResolverService {
       high = high * 2n;
     }
     if (!covered) {
-      throw new Error('1inch quote returned 0 for all attempts (check API key/liquidity/addresses)');
+      throw new Error(
+        '1inch quote returned 0 for all attempts (check API key/liquidity/addresses)',
+      );
     }
 
     // Binary search
@@ -358,7 +521,8 @@ export class ResolverService {
       const q = await this.oneInchQuote(from, to, mid.toString());
       const out = extractOneInchToAmount(q);
       const outBI = out ? BigInt(out) : 0n;
-      if (outBI >= target) high = mid; else low = mid;
+      if (outBI >= target) high = mid;
+      else low = mid;
       if (high - low <= 1n) break;
     }
     return high.toString();

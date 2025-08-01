@@ -5,12 +5,7 @@ import { IntentModule } from './modules/intent/intent.module';
 import { HtlcModule } from './modules/htlc/htlc.module';
 
 @Module({
-  imports: [
-    ConfigModule,
-    ResolverModule,
-    IntentModule,
-    HtlcModule,
-  ],
+  imports: [ConfigModule, ResolverModule, IntentModule, HtlcModule],
   controllers: [],
   providers: [],
 })
