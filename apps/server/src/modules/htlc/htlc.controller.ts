@@ -1,8 +1,9 @@
 import { Controller, Get, Post, Body, Param, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { EvmHtlcService, EvmFundParams, EvmSwapDetails } from './evm-htlc.service';
+import { EvmHtlcService, EvmFundParams, EvmSwapDetails, EvmAllowanceParams } from './evm-htlc.service';
 import { StellarHtlcService, StellarFundParams, StellarSwapDetails } from './stellar-htlc.service';
 import { RelayerService } from './relayer.service';
+import { IntentService } from '../intent/intent.service';
 
 @ApiTags('htlc')
 @Controller('htlc')
@@ -13,6 +14,7 @@ export class HtlcController {
     private readonly evmHtlcService: EvmHtlcService,
     private readonly stellarHtlcService: StellarHtlcService,
     private readonly relayerService: RelayerService,
+    private readonly intentService: IntentService,
   ) {}
 
   @Get('evm/status')
@@ -90,12 +92,72 @@ export class HtlcController {
     return { expired };
   }
 
+  // USDC Allowance Management endpoints
+  @Get('evm/allowance/:owner/:spender')
+  @ApiOperation({ summary: 'Check USDC allowance for HTLC contract' })
+  @ApiResponse({ status: 200, description: 'Allowance amount' })
+  async checkAllowance(
+    @Param('owner') owner: string,
+    @Param('spender') spender: string
+  ): Promise<{ allowance: string }> {
+    this.logger.log(`Checking USDC allowance for owner: ${owner}, spender: ${spender}`);
+    const allowance = await this.evmHtlcService.checkAllowance(owner, spender);
+    return { allowance: allowance.toString() };
+  }
+
+  @Post('evm/approve')
+  @ApiOperation({ summary: 'Approve USDC spending for HTLC contract' })
+  @ApiResponse({ status: 200, description: 'Approval successful' })
+  async approveAllowance(@Body() params: EvmAllowanceParams): Promise<{ success: boolean }> {
+    this.logger.log(`Approving USDC allowance: ${JSON.stringify(params)}`);
+    await this.evmHtlcService.approveAllowance(params);
+    return { success: true };
+  }
+
+  @Get('evm/balance/:address')
+  @ApiOperation({ summary: 'Get USDC balance for an address' })
+  @ApiResponse({ status: 200, description: 'USDC balance' })
+  async getUsdcBalance(@Param('address') address: string): Promise<{ balance: string }> {
+    this.logger.log(`Getting USDC balance for: ${address}`);
+    const balance = await this.evmHtlcService.getUsdcBalance(address);
+    return { balance: balance.toString() };
+  }
+
   @Post('evm/fund')
   @ApiOperation({ summary: 'Fund a new EVM HTLC swap' })
   @ApiResponse({ status: 201, description: 'Swap funded successfully' })
   async fundEvmSwap(@Body() params: EvmFundParams): Promise<{ swapId: string }> {
     this.logger.log(`Funding EVM HTLC swap: ${JSON.stringify(params)}`);
     const swapId = await this.evmHtlcService.fund(params);
+    
+    // Find the intent by hashlock and store the SwapId
+    this.logger.log(`Looking for intent with hashlock: ${params.hashlock}`);
+    
+    // Try to find intent immediately
+    let intent = this.intentService.findByHashlock(params.hashlock);
+    
+    // If not found immediately, wait and retry (for Sepolia timing)
+    if (!intent) {
+      this.logger.log(`Intent not found immediately, waiting for transaction processing...`);
+      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+      intent = this.intentService.findByHashlock(params.hashlock);
+    }
+    
+    if (intent) {
+      this.logger.log(`Found intent ${intent.id}, storing SwapId: ${swapId}`);
+      // Store the SwapId in the intent's tx field for future reference
+      this.intentService.patchStatus(intent.id, 'evm_locked', { swapId });
+      this.logger.log(`Successfully stored SwapId ${swapId} in intent ${intent.id}`);
+    } else {
+      this.logger.warn(`No intent found for hashlock: ${params.hashlock} after retry`);
+      // Debug: list all intents to see what's available
+      const allIntents = this.intentService.getAllIntents();
+      this.logger.log(`Available intents: ${allIntents.length}`);
+      for (const intent of allIntents) {
+        this.logger.log(`Intent ${intent.id}: hashlock = ${intent.plan.hash}`);
+      }
+    }
+    
     return { swapId };
   }
 
@@ -197,5 +259,14 @@ export class HtlcController {
     retryCount: number;
   }> {
     return this.relayerService.getStatus();
+  }
+
+  @Post('relayer/clear')
+  @ApiOperation({ summary: 'Clear relayer current swap (for stuck relayer)' })
+  @ApiResponse({ status: 200, description: 'Relayer cleared successfully' })
+  async clearRelayer(): Promise<{ success: boolean; message: string }> {
+    this.logger.log('Clearing relayer current swap');
+    this.relayerService.clearCurrentSwap();
+    return { success: true, message: 'Relayer current swap cleared' };
   }
 } 

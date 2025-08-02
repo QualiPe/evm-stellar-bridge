@@ -103,15 +103,30 @@ export class RelayerService {
     const activeIntents = this.getActiveIntents();
     
     if (activeIntents.length === 0) {
+      // Clear currentSwapId if no active intents
+      if (this.currentSwapId) {
+        this.logger.log(`No active intents, clearing current swap: ${this.currentSwapId}`);
+        this.currentSwapId = null;
+        this.retryCount = 0;
+      }
       return;
     }
 
     // Process only one swap at a time (as per requirements)
     const intent = activeIntents[0];
     
+    // Check if currentSwapId is still valid (not marked as error)
     if (this.currentSwapId && this.currentSwapId !== intent.id) {
-      this.logger.log(`Another swap ${this.currentSwapId} is in progress, skipping ${intent.id}`);
-      return;
+      // Check if the current swap is still active
+      const currentIntent = this.intentService.get(this.currentSwapId);
+      if (!currentIntent || currentIntent.status === 'error') {
+        this.logger.log(`Current swap ${this.currentSwapId} is no longer active, clearing and processing new intent: ${intent.id}`);
+        this.currentSwapId = null;
+        this.retryCount = 0;
+      } else {
+        this.logger.log(`Another swap ${this.currentSwapId} is in progress, skipping ${intent.id}`);
+        return;
+      }
     }
 
     this.currentSwapId = intent.id;
@@ -162,13 +177,32 @@ export class RelayerService {
   private async handleCreatedSwap(intent: any): Promise<void> {
     this.logger.log(`Handling created swap: ${intent.id}`);
     
-    // Check if EVM HTLC is funded
-    const evmFunded = await this.evmHtlcService.isSwapFunded(intent.plan.hash);
+    // Check if there's a SwapId stored in the intent's tx field
+    const storedSwapId = intent.tx?.swapId;
+    const hashlock = intent.plan.hash;
     
-    if (evmFunded) {
-      this.intentService.patchStatus(intent.id, 'evm_locked');
-      this.logger.log(`Swap ${intent.id} marked as EVM locked`);
+    if (storedSwapId) {
+      // Use the stored SwapId to check funding status
+      try {
+        this.logger.log(`Using stored SwapId ${storedSwapId} to check funding status`);
+        const swapDetails = await this.evmHtlcService.getSwapDetails(storedSwapId);
+        if (swapDetails.isFunded) {
+          this.intentService.patchStatus(intent.id, 'evm_locked');
+          this.logger.log(`Swap ${intent.id} marked as EVM locked using stored SwapId: ${storedSwapId}`);
+          return;
+        } else {
+          this.logger.log(`Swap ${storedSwapId} is not yet funded, waiting...`);
+        }
+      } catch (error) {
+        this.logger.log(`Error checking swap with stored SwapId ${storedSwapId}: ${error.message}`);
+      }
+    } else {
+      this.logger.log(`No stored SwapId found for intent ${intent.id}, waiting for funding...`);
     }
+    
+    // If no stored SwapId or swap not funded, wait for the EVM event to fire
+    // The event will contain both the SwapId and hashlock, allowing us to match them
+    this.logger.log(`Waiting for EVM funded event to match hashlock: ${hashlock}`);
   }
 
   /**
@@ -179,14 +213,23 @@ export class RelayerService {
     
     try {
       // Create Stellar HTLC with same hashlock
+      // Convert decimal amount to integer (multiply by 10^6 for USDC)
+      const stellarAmount = Math.floor(parseFloat(intent.plan.minLock.stellar) * 1000000);
+      
+      // Ensure timelock is a valid number
+      const timelockValue = parseInt(intent.plan.timelocks.stellarSec);
+      if (isNaN(timelockValue)) {
+        throw new Error(`Invalid timelock value: ${intent.plan.timelocks.stellarSec}`);
+      }
+      
       await this.stellarHtlcService.createSwap({
         swapId: intent.plan.hash,
         sender: intent.request.toAddress, // Recipient on EVM becomes sender on Stellar
         recipient: intent.request.toAddress,
         token: 'USDC',
-        amount: BigInt(intent.plan.minLock.stellar),
+        amount: BigInt(stellarAmount),
         hashlock: intent.plan.hash,
-        timelock: BigInt(intent.plan.timelocks.stellarSec)
+        timelock: BigInt(timelockValue)
       });
 
       this.intentService.patchStatus(intent.id, 'stellar_locked');
@@ -230,11 +273,17 @@ export class RelayerService {
         throw new Error(`No preimage found for swap ${intent.id}`);
       }
 
+      // Use SwapId if available, otherwise fallback to hashlock
+      const swapId = intent.tx?.swapId;
+      if (!swapId) {
+        throw new Error(`No SwapId found for swap ${intent.id}. Cannot withdraw from EVM HTLC.`);
+      }
+      
       // Withdraw from EVM HTLC using preimage
-      await this.evmHtlcService.withdraw(intent.plan.hash, intentWithPreimage.preimage);
+      await this.evmHtlcService.withdraw(swapId, intentWithPreimage.preimage);
       
       this.intentService.patchStatus(intent.id, 'withdrawn_evm');
-      this.logger.log(`Swap ${intent.id} marked as EVM withdrawn`);
+      this.logger.log(`Swap ${intent.id} marked as EVM withdrawn using SwapId: ${swapId}`);
     } catch (error) {
       this.logger.error(`Error withdrawing from EVM HTLC for swap ${intent.id}:`, error);
       throw error;
@@ -260,13 +309,21 @@ export class RelayerService {
    * Handle EVM funded event
    */
   private async handleEvmFunded(swapId: string, sender: string, recipient: string, amount: bigint, hashlock: string, timelock: bigint): Promise<void> {
-    this.logger.log(`EVM HTLC funded event: ${swapId}`);
+    this.logger.log(`EVM HTLC funded event: swapId=${swapId}, hashlock=${hashlock}`);
     
     // Find intent by hashlock
     const intent = this.findIntentByHashlock(hashlock);
     if (intent) {
-      this.intentService.patchStatus(intent.id, 'evm_locked');
-      this.logger.log(`Intent ${intent.id} marked as EVM locked due to funding event`);
+      // Store the actual swap ID in the intent for future reference
+      // This fixes the mismatch issue
+      this.logger.log(`Updating intent ${intent.id} with actual swap ID: ${swapId}`);
+      
+      // Update the intent with the actual swap ID and mark as EVM locked
+      // Store SwapId in tx field for future reference
+      this.intentService.patchStatus(intent.id, 'evm_locked', { swapId });
+      this.logger.log(`Intent ${intent.id} marked as EVM locked due to funding event with SwapId stored`);
+    } else {
+      this.logger.warn(`No intent found for hashlock: ${hashlock}`);
     }
   }
 
@@ -274,13 +331,22 @@ export class RelayerService {
    * Handle EVM withdrawn event
    */
   private async handleEvmWithdrawn(swapId: string, recipient: string, preimage: string): Promise<void> {
-    this.logger.log(`EVM HTLC withdrawn event: ${swapId}`);
+    this.logger.log(`EVM HTLC withdrawn event: swapId=${swapId}`);
     
-    // Find intent by swapId
-    const intent = this.findIntentByHashlock(swapId);
+    // Find intent by swapId (stored in tx field) or by hashlock as fallback
+    let intent = this.findIntentBySwapId(swapId);
+    if (!intent) {
+      // Fallback: try to find by hashlock (for backward compatibility)
+      this.logger.log(`No intent found by SwapId ${swapId}, trying hashlock fallback...`);
+      intent = this.findIntentByHashlock(swapId);
+    }
+    
     if (intent) {
+      this.logger.log(`Found intent ${intent.id} for withdrawn swap ${swapId}`);
       this.intentService.patchStatus(intent.id, 'withdrawn_evm');
-      this.logger.log(`Intent ${intent.id} marked as EVM withdrawn due to withdrawal event`);
+      this.logger.log(`Intent ${intent.id} marked as EVM withdrawn`);
+    } else {
+      this.logger.warn(`No intent found for withdrawn swap: ${swapId}`);
     }
   }
 
@@ -288,10 +354,15 @@ export class RelayerService {
    * Handle EVM refunded event
    */
   private async handleEvmRefunded(swapId: string, sender: string): Promise<void> {
-    this.logger.log(`EVM HTLC refunded event: ${swapId}`);
+    this.logger.log(`EVM HTLC refunded event: swapId=${swapId}`);
     
-    // Find intent by swapId
-    const intent = this.findIntentByHashlock(swapId);
+    // Find intent by swapId (stored in tx field) or by hashlock as fallback
+    let intent = this.findIntentBySwapId(swapId);
+    if (!intent) {
+      // Fallback: try to find by hashlock (for backward compatibility)
+      intent = this.findIntentByHashlock(swapId);
+    }
+    
     if (intent) {
       this.intentService.patchStatus(intent.id, 'refunded');
       this.logger.log(`Intent ${intent.id} marked as refunded due to refund event`);
@@ -299,6 +370,8 @@ export class RelayerService {
       // Clear current swap
       this.currentSwapId = null;
       this.retryCount = 0;
+    } else {
+      this.logger.warn(`No intent found for swapId: ${swapId}`);
     }
   }
 
@@ -324,6 +397,13 @@ export class RelayerService {
   }
 
   /**
+   * Find intent by swapId
+   */
+  private findIntentBySwapId(swapId: string): any {
+    return this.intentService.findBySwapId(swapId);
+  }
+
+  /**
    * Sleep utility
    */
   private sleep(ms: number): Promise<void> {
@@ -343,5 +423,15 @@ export class RelayerService {
       currentSwapId: this.currentSwapId,
       retryCount: this.retryCount,
     };
+  }
+
+  /**
+   * Clear current swap ID (for debugging/fixing stuck relayer)
+   */
+  clearCurrentSwap(): void {
+    this.logger.log(`Clearing current swap ID: ${this.currentSwapId}`);
+    this.currentSwapId = null;
+    this.retryCount = 0;
+    this.logger.log('Current swap ID cleared, relayer will process next available intent');
   }
 } 

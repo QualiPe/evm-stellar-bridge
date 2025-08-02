@@ -50,10 +50,23 @@ export class IntentService {
 
   patchStatus(id: string, status: IntentStatus, tx?: Record<string, string>) {
     const i = store.get(id);
-    if (!i) return null;
+    if (!i) {
+      return null;
+    }
+    
+    // Update status
     i.status = status;
-    if (tx) i.tx = { ...(i.tx ?? {}), ...tx };
+    
+    // Update tx field if provided
+    if (tx) {
+      // Ensure tx field exists and merge with existing data
+      i.tx = { ...(i.tx || {}), ...tx };
+    }
+    
+    // Update the store
     store.set(id, i);
+    
+    // Return the updated intent (without preimage)
     const { preimage, ...rest } = i;
     return rest;
   }
@@ -88,6 +101,19 @@ export class IntentService {
   findByHashlock(hashlock: string): Intent | null {
     for (const [id, intent] of store.entries()) {
       if (intent.plan.hash === hashlock) {
+        const { preimage, ...intentWithoutPreimage } = intent;
+        return intentWithoutPreimage;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Find intent by swapId (stored in tx field)
+   */
+  findBySwapId(swapId: string): Intent | null {
+    for (const [id, intent] of store.entries()) {
+      if (intent.tx?.swapId === swapId) {
         const { preimage, ...intentWithoutPreimage } = intent;
         return intentWithoutPreimage;
       }

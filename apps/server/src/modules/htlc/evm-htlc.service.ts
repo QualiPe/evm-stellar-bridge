@@ -301,6 +301,12 @@ export interface EvmFundParams {
   timelock: bigint;
 }
 
+export interface EvmAllowanceParams {
+  owner: string;
+  spender: string;
+  amount: bigint;
+}
+
 @Injectable()
 export class EvmHtlcService {
   private readonly logger = new Logger(EvmHtlcService.name);
@@ -337,11 +343,129 @@ export class EvmHtlcService {
   }
 
   /**
-   * Fund a new HTLC swap on EVM
+   * Check USDC allowance for HTLC contract
+   */
+  async checkAllowance(owner: string, spender: string): Promise<bigint> {
+    try {
+      this.logger.log(`Checking USDC allowance for owner: ${owner}, spender: ${spender}`);
+      
+      // USDC contract address on Sepolia testnet
+      const usdcAddress = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
+      
+      // Create USDC contract instance
+      const usdcContract = new ethers.Contract(
+        usdcAddress,
+        [
+          'function allowance(address owner, address spender) view returns (uint256)',
+          'function approve(address spender, uint256 amount) returns (bool)',
+          'function balanceOf(address account) view returns (uint256)',
+          'function mint(address to, uint256 amount)',
+          'function transfer(address to, uint256 amount) returns (bool)'
+        ],
+        this.signer
+      );
+      
+      const allowance = await usdcContract.allowance(owner, spender);
+      this.logger.log(`Current allowance: ${allowance.toString()}`);
+      return allowance;
+    } catch (error) {
+      this.logger.error('Error checking allowance:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Approve USDC spending for HTLC contract
+   */
+  async approveAllowance(params: EvmAllowanceParams): Promise<void> {
+    try {
+      this.logger.log(`Approving USDC allowance: ${params.amount.toString()} for spender: ${params.spender}`);
+      
+      // USDC contract address on Sepolia testnet
+      const usdcAddress = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
+      
+      // Create USDC contract instance
+      const usdcContract = new ethers.Contract(
+        usdcAddress,
+        [
+          'function allowance(address owner, address spender) view returns (uint256)',
+          'function approve(address spender, uint256 amount) returns (bool)',
+          'function balanceOf(address account) view returns (uint256)',
+          'function mint(address to, uint256 amount)',
+          'function transfer(address to, uint256 amount) returns (bool)'
+        ],
+        this.signer
+      );
+      
+      const tx = await usdcContract.approve(params.spender, params.amount);
+      await tx.wait();
+      
+      this.logger.log(`USDC allowance approved successfully`);
+    } catch (error) {
+      this.logger.error('Error approving allowance:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get USDC balance for an address
+   */
+  async getUsdcBalance(address: string): Promise<bigint> {
+    try {
+      this.logger.log(`Getting USDC balance for: ${address}`);
+      
+      // USDC contract address on Sepolia testnet
+      const usdcAddress = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
+      
+      // Create USDC contract instance
+      const usdcContract = new ethers.Contract(
+        usdcAddress,
+        [
+          'function allowance(address owner, address spender) view returns (uint256)',
+          'function approve(address spender, uint256 amount) returns (bool)',
+          'function balanceOf(address account) view returns (uint256)',
+          'function mint(address to, uint256 amount)',
+          'function transfer(address to, uint256 amount) returns (bool)'
+        ],
+        this.signer
+      );
+      
+      const balance = await usdcContract.balanceOf(address);
+      this.logger.log(`USDC balance: ${balance.toString()}`);
+      return balance;
+    } catch (error) {
+      this.logger.error('Error getting USDC balance:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fund a new HTLC swap on EVM with automatic allowance handling
    */
   async fund(params: EvmFundParams): Promise<string> {
     try {
       this.logger.log(`Funding HTLC swap for recipient: ${params.recipient}, amount: ${params.amount}`);
+      
+      // Get the signer's address
+      const signerAddress = await this.signer.getAddress();
+      const contractAddress = await this.contract.getAddress();
+      
+      // Check USDC balance
+      const balance = await this.getUsdcBalance(signerAddress);
+      if (balance < params.amount) {
+        throw new Error(`Insufficient USDC balance. Required: ${params.amount}, Available: ${balance}`);
+      }
+      
+      // Check and handle allowance
+      const allowance = await this.checkAllowance(signerAddress, contractAddress);
+      if (allowance < params.amount) {
+        this.logger.log(`Insufficient allowance. Current: ${allowance}, Required: ${params.amount}. Approving...`);
+        await this.approveAllowance({
+          owner: signerAddress,
+          spender: contractAddress,
+          amount: params.amount
+        });
+      }
       
       const tx = await this.contract.fund(
         params.recipient,
@@ -431,7 +555,7 @@ export class EvmHtlcService {
         preimage: details[8]
       };
       
-      this.logger.log(`Swap details retrieved: ${JSON.stringify(swapDetails, null, 2)}`);
+      this.logger.log(`Swap details retrieved for ${swapId}: isFunded=${swapDetails.isFunded}, isWithdrawn=${swapDetails.isWithdrawn}, isRefunded=${swapDetails.isRefunded}`);
       return swapDetails;
     } catch (error) {
       this.logger.error(`Error getting swap details for ${swapId}:`, error);
