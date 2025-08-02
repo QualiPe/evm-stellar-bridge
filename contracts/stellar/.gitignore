@@ -1,0 +1,26 @@
+# Node
+node_modules
+
+# Yarn
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Rust's output directory
+target
+
+# Local settings
+.soroban
+.stellar
+
+# generated bindings
+packages/htlc-contract
+
+# Environment variables
+.env
+.env.*
+!.env.example
