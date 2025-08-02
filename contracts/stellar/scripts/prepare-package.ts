@@ -1,7 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import dotenv from 'dotenv';
-dotenv.config({ path: path.join(process.cwd(), '../../.env') });
 
 // Path to the package.json files
 const rootPackageJsonPath = path.resolve('package.json');
@@ -17,6 +15,9 @@ const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
 // Update the name and version
 packageJson.name = '@QualiPe/htlc-contract';
 packageJson.version = targetVersion;
+
+// Update the dependencies
+packageJson.dependencies['@stellar/stellar-sdk'] = '^14.0.0-rc.3';
 
 // Add repository and publishConfig
 packageJson.repository = 'https://github.com/QualiPe/evm-stellar-bridge';

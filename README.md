@@ -25,6 +25,10 @@ Cross-chain atomic swap bridge between EVM chains and Stellar using HTLC contrac
 
 ## 🚀 Quick Start
 
+> **Note**
+> Before anything else, you need to build internal packages.
+> Run `make prepare-repo` to build and install all dependencies.
+
 ```bash
 # Install
 pnpm install
