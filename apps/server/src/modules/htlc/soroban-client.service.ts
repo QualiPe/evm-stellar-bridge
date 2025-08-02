@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as crypto from 'crypto';
+import { Buffer } from 'buffer';
+import {
+  Client as HTLCClient,
+  HTLCSwap as ContractHTLCSwap,
+} from '@QualiPe/htlc-contract';
+import { Keypair } from '@stellar/stellar-sdk';
+import { basicNodeSigner } from '@stellar/stellar-sdk/lib/contract';
 
 export interface SorobanConfig {
   rpcUrl: string;
@@ -33,17 +39,18 @@ export interface CreateSwapParams {
 @Injectable()
 export class SorobanClientService {
   private readonly logger = new Logger(SorobanClientService.name);
-  private server: any; // TODO: Replace with proper Soroban.Server type when SDK is properly configured
   private config: SorobanConfig;
-  private sourceAccount?: any; // TODO: Replace with proper xdr.AccountId type when SDK is properly configured
+  private htlcClient?: HTLCClient;
+  private keypair?: Keypair;
 
   constructor() {
     this.initializeSorobanClient();
   }
 
-  private async initializeSorobanClient() {
+  private initializeSorobanClient() {
     try {
-      const rpcUrl = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
+      const rpcUrl =
+        process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
       const contractAddress = process.env.STELLAR_HTLC_CONTRACT_ADDRESS;
       const network = process.env.STELLAR_NETWORK || 'testnet';
       const secretKey = process.env.STELLAR_SECRET_KEY;
@@ -56,19 +63,36 @@ export class SorobanClientService {
         rpcUrl,
         network,
         contractId: contractAddress,
-        secretKey
+        secretKey,
       };
 
-      // TODO: Initialize Soroban.Server when SDK is properly configured
-      this.server = null;
-
+      // Initialize keypair if secret key is provided
       if (secretKey) {
-        // TODO: Fix AccountId creation when Soroban SDK is properly configured
-        this.sourceAccount = undefined;
+        this.keypair = Keypair.fromSecret(secretKey);
+        this.logger.log(`Keypair initialized for: ${this.keypair.publicKey()}`);
       }
 
-      this.logger.log(`Soroban client initialized with contract: ${this.config.contractId}`);
-      this.logger.log(`Network: ${this.config.network}, RPC: ${this.config.rpcUrl}`);
+      // Initialize HTLC client
+      const networkPassphrase = this.getNetworkPassphrase();
+      const { signTransaction } = basicNodeSigner(
+        this.keypair || Keypair.random(),
+        networkPassphrase,
+      );
+
+      this.htlcClient = new HTLCClient({
+        networkPassphrase,
+        contractId: contractAddress,
+        rpcUrl,
+        signTransaction,
+        publicKey: this.keypair?.publicKey() || '',
+      });
+
+      this.logger.log(
+        `Soroban client initialized with contract: ${this.config.contractId}`,
+      );
+      this.logger.log(
+        `Network: ${this.config.network}, RPC: ${this.config.rpcUrl}`,
+      );
     } catch (error) {
       this.logger.error('Failed to initialize Soroban client:', error);
       throw error;
@@ -80,21 +104,38 @@ export class SorobanClientService {
    */
   async createSwap(params: CreateSwapParams): Promise<void> {
     this.logger.log(`Creating Soroban HTLC swap: ${params.swapId}`);
-    
-    try {
-      // TODO: Implement real Soroban contract call when SDK is properly configured
-      this.logger.log(`Would create HTLC on Soroban contract: ${this.config.contractId}`);
-      this.logger.log(`Parameters:`, {
-        swapId: params.swapId,
-        sender: params.sender,
-        recipient: params.recipient,
-        amount: params.amount.toString(),
-        hashlock: params.hashlock,
-        timelock: params.timelock.toString()
-      });
 
-      // Simulate successful creation
+    try {
+      if (!this.htlcClient) {
+        throw new Error('HTLC client not initialized');
+      }
+
+      const swapIdBuffer = this.stringToBuffer(params.swapId);
+      const hashlockBuffer = this.stringToBuffer(params.hashlock);
+
+      const tx = await this.htlcClient.create_swap(
+        {
+          swap_id: swapIdBuffer,
+          sender: params.sender,
+          recipient: params.recipient,
+          token: params.token,
+          amount: BigInt(params.amount),
+          hashlock: hashlockBuffer,
+          timelock: BigInt(params.timelock),
+        },
+        {
+          timeoutInSeconds: 30,
+          simulate: true,
+        },
+      );
+
+      if (!tx) {
+        throw new Error('Transaction failed');
+      }
+
+      const result = await tx.signAndSend();
       this.logger.log(`Soroban HTLC swap created: ${params.swapId}`);
+      this.logger.log(`Transaction result:`, result);
     } catch (error) {
       this.logger.error(`Error creating Soroban HTLC swap: ${error.message}`);
       throw error;
@@ -104,22 +145,40 @@ export class SorobanClientService {
   /**
    * Withdraw from HTLC using preimage
    */
-  async withdraw(swapId: string, recipient: string, preimage: string): Promise<void> {
+  async withdraw(
+    swapId: string,
+    recipient: string,
+    preimage: string,
+  ): Promise<void> {
     this.logger.log(`Withdrawing from Soroban HTLC swap: ${swapId}`);
-    
-    try {
-      // TODO: Implement real Soroban contract withdrawal when SDK is properly configured
-      this.logger.log(`Would withdraw from Soroban contract: ${this.config.contractId}`);
-      this.logger.log(`Parameters:`, {
-        swapId: swapId,
-        recipient: recipient,
-        preimage: preimage
-      });
 
-      // Simulate successful withdrawal
+    try {
+      if (!this.htlcClient) {
+        throw new Error('HTLC client not initialized');
+      }
+
+      const swapIdBuffer = this.stringToBuffer(swapId);
+      const preimageBuffer = this.stringToBuffer(preimage);
+
+      const tx = await this.htlcClient.withdraw(
+        {
+          swap_id: swapIdBuffer,
+          recipient: recipient,
+          preimage: preimageBuffer,
+        },
+        {
+          timeoutInSeconds: 30,
+          simulate: true,
+        },
+      );
+
+      const result = await tx.signAndSend();
       this.logger.log(`Soroban HTLC swap withdrawn: ${swapId}`);
+      this.logger.log(`Transaction result:`, result);
     } catch (error) {
-      this.logger.error(`Error withdrawing from Soroban HTLC swap: ${error.message}`);
+      this.logger.error(
+        `Error withdrawing from Soroban HTLC swap: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -129,17 +188,28 @@ export class SorobanClientService {
    */
   async refund(swapId: string, sender: string): Promise<void> {
     this.logger.log(`Refunding Soroban HTLC swap: ${swapId}`);
-    
-    try {
-      // TODO: Implement real Soroban contract refund when SDK is properly configured
-      this.logger.log(`Would refund from Soroban contract: ${this.config.contractId}`);
-      this.logger.log(`Parameters:`, {
-        swapId: swapId,
-        sender: sender
-      });
 
-      // Simulate successful refund
+    try {
+      if (!this.htlcClient) {
+        throw new Error('HTLC client not initialized');
+      }
+
+      const swapIdBuffer = this.stringToBuffer(swapId);
+
+      const tx = await this.htlcClient.refund(
+        {
+          swap_id: swapIdBuffer,
+          sender: sender,
+        },
+        {
+          timeoutInSeconds: 30,
+          simulate: true,
+        },
+      );
+
+      const result = await tx.signAndSend();
       this.logger.log(`Soroban HTLC swap refunded: ${swapId}`);
+      this.logger.log(`Transaction result:`, result);
     } catch (error) {
       this.logger.error(`Error refunding Soroban HTLC swap: ${error.message}`);
       throw error;
@@ -151,23 +221,49 @@ export class SorobanClientService {
    */
   async getSwap(swapId: string): Promise<HTLCSwap | null> {
     this.logger.log(`Getting Soroban swap details for: ${swapId}`);
-    
-    try {
-      // TODO: Implement real Soroban contract query when SDK is properly configured
-      this.logger.log(`Would query Soroban contract: ${this.config.contractId}`);
-      this.logger.log(`Querying swap: ${swapId}`);
 
-      // For now, return a simulated swap with string values to avoid BigInt serialization issues
-      return {
-        sender: 'simulated_sender',
-        recipient: 'simulated_recipient',
-        token: 'USDC',
-        amount: BigInt(1000000),
-        hashlock: swapId,
-        timelock: BigInt(Math.floor(Date.now() / 1000) + 3600),
-        isWithdrawn: false,
-        isRefunded: false
+    try {
+      if (!this.htlcClient) {
+        throw new Error('HTLC client not initialized');
+      }
+
+      const swapIdBuffer = this.stringToBuffer(swapId);
+
+      const tx = await this.htlcClient.get_swap(
+        {
+          swap_id: swapIdBuffer,
+        },
+        {
+          timeoutInSeconds: 30,
+          simulate: true,
+        },
+      );
+
+      const result = await tx.simulate();
+
+      if (!result.result || result.result.value === null) {
+        this.logger.log(`Swap not found: ${swapId}`);
+        return null;
+      }
+
+      const contractSwap: ContractHTLCSwap = result.result.value;
+
+      const swap: HTLCSwap = {
+        sender: contractSwap.sender,
+        recipient: contractSwap.recipient,
+        token: contractSwap.token,
+        amount: contractSwap.amount,
+        hashlock: this.bufferToString(contractSwap.hashlock),
+        timelock: contractSwap.timelock,
+        preimage: contractSwap.preimage
+          ? this.bufferToString(contractSwap.preimage.value)
+          : undefined,
+        isWithdrawn: contractSwap.is_withdrawn,
+        isRefunded: contractSwap.is_refunded,
       };
+
+      this.logger.log(`Swap details retrieved:`, swap);
+      return swap;
     } catch (error) {
       this.logger.error(`Error getting Soroban swap details: ${error.message}`);
       return null;
@@ -179,21 +275,31 @@ export class SorobanClientService {
    */
   async verifyPreimage(swapId: string, preimage: string): Promise<boolean> {
     this.logger.log(`Verifying preimage for Soroban swap: ${swapId}`);
-    
+
     try {
-      // TODO: Implement real Soroban contract verification when SDK is properly configured
-      this.logger.log(`Would verify preimage on Soroban contract: ${this.config.contractId}`);
-      
-      // For now, do a simple hash verification
-      const crypto = require('crypto');
-      const preimageBuffer = preimage.startsWith('0x') 
-        ? Buffer.from(preimage.slice(2), 'hex')
-        : Buffer.from(preimage, 'hex');
-      
-      const computedHash = crypto.createHash('sha256').update(preimageBuffer).digest('hex');
-      this.logger.log(`Preimage verification result: ${'0x' + computedHash}`);
-      
-      return true; // Simulated success
+      if (!this.htlcClient) {
+        throw new Error('HTLC client not initialized');
+      }
+
+      const swapIdBuffer = this.stringToBuffer(swapId);
+      const preimageBuffer = this.stringToBuffer(preimage);
+
+      const tx = await this.htlcClient.verify_preimage(
+        {
+          swap_id: swapIdBuffer,
+          preimage: preimageBuffer,
+        },
+        {
+          timeoutInSeconds: 30,
+          simulate: true,
+        },
+      );
+
+      const result = await tx.simulate();
+      const isValid = result.result;
+
+      this.logger.log(`Preimage verification result: ${isValid}`);
+      return isValid;
     } catch (error) {
       this.logger.error(`Error verifying preimage: ${error.message}`);
       return false;
@@ -205,15 +311,50 @@ export class SorobanClientService {
    */
   async swapExists(swapId: string): Promise<boolean> {
     this.logger.log(`Checking if Soroban swap exists: ${swapId}`);
-    
+
     try {
-      // TODO: Implement real Soroban contract check when SDK is properly configured
-      this.logger.log(`Would check Soroban contract: ${this.config.contractId}`);
-      return true; // Simulated existence
+      if (!this.htlcClient) {
+        throw new Error('HTLC client not initialized');
+      }
+
+      const swapIdBuffer = this.stringToBuffer(swapId);
+
+      const tx = await this.htlcClient.swap_exists(
+        {
+          swap_id: swapIdBuffer,
+        },
+        {
+          timeoutInSeconds: 30,
+          simulate: true,
+        },
+      );
+
+      const result = await tx.simulate();
+      const exists = result.result;
+
+      this.logger.log(`Swap exists: ${exists}`);
+      return exists;
     } catch (error) {
       this.logger.error(`Error checking swap existence: ${error.message}`);
       return false;
     }
+  }
+
+  /**
+   * Convert string to Buffer for contract calls
+   */
+  private stringToBuffer(str: string): Buffer {
+    if (str.startsWith('0x')) {
+      return Buffer.from(str.slice(2), 'hex');
+    }
+    return Buffer.from(str, 'hex');
+  }
+
+  /**
+   * Convert Buffer to string for responses
+   */
+  private bufferToString(buffer: Buffer): string {
+    return '0x' + buffer.toString('hex');
   }
 
   /**
@@ -231,10 +372,10 @@ export class SorobanClientService {
   }
 
   /**
-   * Get server instance for direct access
+   * Get HTLC client instance for direct access
    */
-  getServer(): any {
-    return this.server;
+  getHTLCClient(): HTLCClient | undefined {
+    return this.htlcClient;
   }
 
   /**
@@ -243,4 +384,11 @@ export class SorobanClientService {
   getConfig(): SorobanConfig {
     return this.config;
   }
-} 
+
+  /**
+   * Check if client is properly initialized
+   */
+  isInitialized(): boolean {
+    return !!this.htlcClient;
+  }
+}

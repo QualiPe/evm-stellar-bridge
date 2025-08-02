@@ -8,8 +8,18 @@ import { IntentModule } from '../intent/intent.module';
 
 @Module({
   imports: [IntentModule],
-  providers: [EvmHtlcService, StellarHtlcService, SorobanClientService, RelayerService],
+  providers: [
+    EvmHtlcService,
+    StellarHtlcService,
+    SorobanClientService,
+    RelayerService,
+  ],
   controllers: [HtlcController],
-  exports: [EvmHtlcService, StellarHtlcService, SorobanClientService, RelayerService],
+  exports: [
+    EvmHtlcService,
+    StellarHtlcService,
+    SorobanClientService,
+    RelayerService,
+  ],
 })
-export class HtlcModule {} 
+export class HtlcModule {}

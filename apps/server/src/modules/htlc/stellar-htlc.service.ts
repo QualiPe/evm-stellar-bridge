@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { SorobanClientService, HTLCSwap, CreateSwapParams } from './soroban-client.service';
+import {
+  SorobanClientService,
+  CreateSwapParams,
+} from './soroban-client.service';
 
 export interface StellarSwapDetails {
   sender: string;
@@ -27,13 +30,21 @@ export interface StellarFundParams {
 export class StellarHtlcService {
   private readonly logger = new Logger(StellarHtlcService.name);
 
-  constructor(private readonly sorobanClient: SorobanClientService) {}
+  constructor(private readonly sorobanClient: SorobanClientService) {
+    this.initializeStellarService();
+  }
 
-  private async initializeStellarService() {
+  private initializeStellarService() {
     try {
       const config = this.sorobanClient.getConfig();
-      this.logger.log(`Stellar HTLC service initialized with contract: ${config.contractId}`);
+      this.logger.log(
+        `Stellar HTLC service initialized with contract: ${config.contractId}`,
+      );
       this.logger.log(`Network: ${config.network}, RPC: ${config.rpcUrl}`);
+
+      if (!this.sorobanClient.isInitialized()) {
+        this.logger.warn('Soroban client not properly initialized');
+      }
     } catch (error) {
       this.logger.error('Failed to initialize Stellar HTLC service:', error);
       this.logger.log('Falling back to simulation mode');
@@ -45,7 +56,7 @@ export class StellarHtlcService {
    */
   async createSwap(params: StellarFundParams): Promise<void> {
     this.logger.log(`Creating Stellar HTLC swap: ${params.swapId}`);
-    
+
     try {
       const createParams: CreateSwapParams = {
         swapId: params.swapId,
@@ -54,7 +65,7 @@ export class StellarHtlcService {
         token: params.token,
         amount: params.amount,
         hashlock: params.hashlock,
-        timelock: params.timelock
+        timelock: params.timelock,
       };
 
       await this.sorobanClient.createSwap(createParams);
@@ -70,14 +81,20 @@ export class StellarHtlcService {
   /**
    * Withdraw from HTLC using preimage
    */
-  async withdraw(swapId: string, recipient: string, preimage: string): Promise<void> {
+  async withdraw(
+    swapId: string,
+    recipient: string,
+    preimage: string,
+  ): Promise<void> {
     this.logger.log(`Withdrawing from Stellar HTLC swap: ${swapId}`);
-    
+
     try {
       await this.sorobanClient.withdraw(swapId, recipient, preimage);
       this.logger.log(`Stellar HTLC swap withdrawn: ${swapId}`);
     } catch (error) {
-      this.logger.error(`Error withdrawing from Stellar HTLC swap: ${error.message}`);
+      this.logger.error(
+        `Error withdrawing from Stellar HTLC swap: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -87,7 +104,7 @@ export class StellarHtlcService {
    */
   async refund(swapId: string, sender: string): Promise<void> {
     this.logger.log(`Refunding Stellar HTLC swap: ${swapId}`);
-    
+
     try {
       await this.sorobanClient.refund(swapId, sender);
       this.logger.log(`Stellar HTLC swap refunded: ${swapId}`);
@@ -102,7 +119,7 @@ export class StellarHtlcService {
    */
   async getSwap(swapId: string): Promise<StellarSwapDetails | null> {
     this.logger.log(`Getting Stellar swap details for: ${swapId}`);
-    
+
     try {
       const swap = await this.sorobanClient.getSwap(swapId);
       if (!swap) {
@@ -118,7 +135,7 @@ export class StellarHtlcService {
         timelock: swap.timelock.toString(), // Convert BigInt to string for JSON serialization
         preimage: swap.preimage,
         isWithdrawn: swap.isWithdrawn,
-        isRefunded: swap.isRefunded
+        isRefunded: swap.isRefunded,
       };
     } catch (error) {
       this.logger.error(`Error getting Stellar swap details: ${error.message}`);
@@ -131,7 +148,7 @@ export class StellarHtlcService {
    */
   async verifyPreimage(swapId: string, preimage: string): Promise<boolean> {
     this.logger.log(`Verifying preimage for Stellar swap: ${swapId}`);
-    
+
     try {
       return await this.sorobanClient.verifyPreimage(swapId, preimage);
     } catch (error) {
@@ -145,7 +162,7 @@ export class StellarHtlcService {
    */
   async swapExists(swapId: string): Promise<boolean> {
     this.logger.log(`Checking if Stellar swap exists: ${swapId}`);
-    
+
     try {
       return await this.sorobanClient.swapExists(swapId);
     } catch (error) {
@@ -159,7 +176,7 @@ export class StellarHtlcService {
    */
   getAllSwaps(): StellarSwapDetails[] {
     this.logger.log('Getting all Stellar swaps (simulated)');
-    return []; // Simulated empty list
+    return []; // Simulated empty list - in production, this would query the contract
   }
 
   /**
@@ -167,6 +184,18 @@ export class StellarHtlcService {
    */
   clearSwaps(): void {
     this.logger.log('Clearing all Stellar swaps (simulated)');
-    // No-op for now
+    // No-op for now - in production, this would interact with the contract
   }
-} 
+
+  /**
+   * Get service status
+   */
+  getStatus(): { initialized: boolean; contractId?: string; network?: string } {
+    const config = this.sorobanClient.getConfig();
+    return {
+      initialized: this.sorobanClient.isInitialized(),
+      contractId: config.contractId,
+      network: config.network,
+    };
+  }
+}

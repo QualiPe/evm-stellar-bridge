@@ -82,16 +82,22 @@ export class IntentService {
    * Get all active intents
    */
   getActiveIntents(): Intent[] {
-    const activeStatuses: IntentStatus[] = ['created', 'evm_locked', 'stellar_locked', 'withdrawn_stellar', 'withdrawn_evm'];
+    const activeStatuses: IntentStatus[] = [
+      'created',
+      'evm_locked',
+      'stellar_locked',
+      'withdrawn_stellar',
+      'withdrawn_evm',
+    ];
     const activeIntents: Intent[] = [];
-    
+
     for (const [id, intent] of store.entries()) {
       if (activeStatuses.includes(intent.status)) {
         const { preimage, ...intentWithoutPreimage } = intent;
         activeIntents.push(intentWithoutPreimage);
       }
     }
-    
+
     return activeIntents;
   }
 

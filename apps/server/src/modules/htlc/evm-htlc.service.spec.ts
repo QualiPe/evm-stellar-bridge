@@ -25,4 +25,4 @@ describe('EvmHtlcService', () => {
   // Note: These tests would require proper mocking of ethers.js
   // and a test environment setup. For now, we're just testing
   // that the service can be instantiated.
-}); 
+});

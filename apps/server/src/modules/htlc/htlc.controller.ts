@@ -1,9 +1,16 @@
 import { Controller, Get, Post, Body, Param, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { EvmHtlcService, EvmFundParams, EvmSwapDetails, EvmAllowanceParams } from './evm-htlc.service';
-import { StellarHtlcService, StellarFundParams, StellarSwapDetails } from './stellar-htlc.service';
+import {
+  EvmHtlcService,
+  EvmFundParams,
+  EvmSwapDetails,
+} from './evm-htlc.service';
+import {
+  StellarHtlcService,
+  StellarFundParams,
+  StellarSwapDetails,
+} from './stellar-htlc.service';
 import { RelayerService } from './relayer.service';
-import { IntentService } from '../intent/intent.service';
 
 @ApiTags('htlc')
 @Controller('htlc')
@@ -14,7 +21,6 @@ export class HtlcController {
     private readonly evmHtlcService: EvmHtlcService,
     private readonly stellarHtlcService: StellarHtlcService,
     private readonly relayerService: RelayerService,
-    private readonly intentService: IntentService,
   ) {}
 
   @Get('evm/status')
@@ -24,7 +30,7 @@ export class HtlcController {
     try {
       const balance = await this.evmHtlcService.getContractBalance();
       const count = await this.evmHtlcService.getSwapCount();
-      
+
       return {
         status: 'operational',
         contractBalance: balance.toString(),
@@ -48,7 +54,7 @@ export class HtlcController {
     try {
       const contractAddress = process.env.STELLAR_HTLC_CONTRACT_ADDRESS;
       const network = process.env.STELLAR_NETWORK || 'testnet';
-      
+
       return {
         status: 'operational',
         contractAddress: contractAddress,
@@ -77,7 +83,9 @@ export class HtlcController {
   @Get('evm/swap/:swapId/funded')
   @ApiOperation({ summary: 'Check if EVM swap is funded' })
   @ApiResponse({ status: 200, description: 'Funding status' })
-  async isEvmSwapFunded(@Param('swapId') swapId: string): Promise<{ funded: boolean }> {
+  async isEvmSwapFunded(
+    @Param('swapId') swapId: string,
+  ): Promise<{ funded: boolean }> {
     this.logger.log(`Checking if EVM swap is funded: ${swapId}`);
     const funded = await this.evmHtlcService.isSwapFunded(swapId);
     return { funded };
@@ -86,85 +94,31 @@ export class HtlcController {
   @Get('evm/swap/:swapId/expired')
   @ApiOperation({ summary: 'Check if EVM swap is expired' })
   @ApiResponse({ status: 200, description: 'Expiration status' })
-  async isEvmSwapExpired(@Param('swapId') swapId: string): Promise<{ expired: boolean }> {
+  async isEvmSwapExpired(
+    @Param('swapId') swapId: string,
+  ): Promise<{ expired: boolean }> {
     this.logger.log(`Checking if EVM swap is expired: ${swapId}`);
     const expired = await this.evmHtlcService.isSwapExpired(swapId);
     return { expired };
   }
 
-  // USDC Allowance Management endpoints
-  @Get('evm/allowance/:owner/:spender')
-  @ApiOperation({ summary: 'Check USDC allowance for HTLC contract' })
-  @ApiResponse({ status: 200, description: 'Allowance amount' })
-  async checkAllowance(
-    @Param('owner') owner: string,
-    @Param('spender') spender: string
-  ): Promise<{ allowance: string }> {
-    this.logger.log(`Checking USDC allowance for owner: ${owner}, spender: ${spender}`);
-    const allowance = await this.evmHtlcService.checkAllowance(owner, spender);
-    return { allowance: allowance.toString() };
-  }
-
-  @Post('evm/approve')
-  @ApiOperation({ summary: 'Approve USDC spending for HTLC contract' })
-  @ApiResponse({ status: 200, description: 'Approval successful' })
-  async approveAllowance(@Body() params: EvmAllowanceParams): Promise<{ success: boolean }> {
-    this.logger.log(`Approving USDC allowance: ${JSON.stringify(params)}`);
-    await this.evmHtlcService.approveAllowance(params);
-    return { success: true };
-  }
-
-  @Get('evm/balance/:address')
-  @ApiOperation({ summary: 'Get USDC balance for an address' })
-  @ApiResponse({ status: 200, description: 'USDC balance' })
-  async getUsdcBalance(@Param('address') address: string): Promise<{ balance: string }> {
-    this.logger.log(`Getting USDC balance for: ${address}`);
-    const balance = await this.evmHtlcService.getUsdcBalance(address);
-    return { balance: balance.toString() };
-  }
-
   @Post('evm/fund')
   @ApiOperation({ summary: 'Fund a new EVM HTLC swap' })
   @ApiResponse({ status: 201, description: 'Swap funded successfully' })
-  async fundEvmSwap(@Body() params: EvmFundParams): Promise<{ swapId: string }> {
+  async fundEvmSwap(
+    @Body() params: EvmFundParams,
+  ): Promise<{ swapId: string }> {
     this.logger.log(`Funding EVM HTLC swap: ${JSON.stringify(params)}`);
     const swapId = await this.evmHtlcService.fund(params);
-    
-    // Find the intent by hashlock and store the SwapId
-    this.logger.log(`Looking for intent with hashlock: ${params.hashlock}`);
-    
-    // Try to find intent immediately
-    let intent = this.intentService.findByHashlock(params.hashlock);
-    
-    // If not found immediately, wait and retry (for Sepolia timing)
-    if (!intent) {
-      this.logger.log(`Intent not found immediately, waiting for transaction processing...`);
-      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
-      intent = this.intentService.findByHashlock(params.hashlock);
-    }
-    
-    if (intent) {
-      this.logger.log(`Found intent ${intent.id}, storing SwapId: ${swapId}`);
-      // Store the SwapId in the intent's tx field for future reference
-      this.intentService.patchStatus(intent.id, 'evm_locked', { swapId });
-      this.logger.log(`Successfully stored SwapId ${swapId} in intent ${intent.id}`);
-    } else {
-      this.logger.warn(`No intent found for hashlock: ${params.hashlock} after retry`);
-      // Debug: list all intents to see what's available
-      const allIntents = this.intentService.getAllIntents();
-      this.logger.log(`Available intents: ${allIntents.length}`);
-      for (const intent of allIntents) {
-        this.logger.log(`Intent ${intent.id}: hashlock = ${intent.plan.hash}`);
-      }
-    }
-    
     return { swapId };
   }
 
   @Post('evm/withdraw')
   @ApiOperation({ summary: 'Withdraw from EVM HTLC swap' })
   @ApiResponse({ status: 200, description: 'Withdrawal successful' })
-  async withdrawEvmSwap(@Body() body: { swapId: string; preimage: string }): Promise<{ success: boolean }> {
+  async withdrawEvmSwap(
+    @Body() body: { swapId: string; preimage: string },
+  ): Promise<{ success: boolean }> {
     this.logger.log(`Withdrawing from EVM HTLC swap: ${body.swapId}`);
     await this.evmHtlcService.withdraw(body.swapId, body.preimage);
     return { success: true };
@@ -173,7 +127,9 @@ export class HtlcController {
   @Post('evm/refund')
   @ApiOperation({ summary: 'Refund EVM HTLC swap' })
   @ApiResponse({ status: 200, description: 'Refund successful' })
-  async refundEvmSwap(@Body() body: { swapId: string }): Promise<{ success: boolean }> {
+  async refundEvmSwap(
+    @Body() body: { swapId: string },
+  ): Promise<{ success: boolean }> {
     this.logger.log(`Refunding EVM HTLC swap: ${body.swapId}`);
     await this.evmHtlcService.refund(body.swapId);
     return { success: true };
@@ -183,7 +139,9 @@ export class HtlcController {
   @Get('stellar/swap/:swapId')
   @ApiOperation({ summary: 'Get Stellar swap details' })
   @ApiResponse({ status: 200, description: 'Swap details', type: Object })
-  async getStellarSwap(@Param('swapId') swapId: string): Promise<StellarSwapDetails | null> {
+  async getStellarSwap(
+    @Param('swapId') swapId: string,
+  ): Promise<StellarSwapDetails | null> {
     this.logger.log(`Getting Stellar swap details for: ${swapId}`);
     return await this.stellarHtlcService.getSwap(swapId);
   }
@@ -191,7 +149,9 @@ export class HtlcController {
   @Post('stellar/create')
   @ApiOperation({ summary: 'Create a new Stellar HTLC swap' })
   @ApiResponse({ status: 201, description: 'Swap created successfully' })
-  async createStellarSwap(@Body() params: StellarFundParams): Promise<{ success: boolean }> {
+  async createStellarSwap(
+    @Body() params: StellarFundParams,
+  ): Promise<{ success: boolean }> {
     this.logger.log(`Creating Stellar HTLC swap: ${JSON.stringify(params)}`);
     await this.stellarHtlcService.createSwap(params);
     return { success: true };
@@ -200,16 +160,24 @@ export class HtlcController {
   @Post('stellar/withdraw')
   @ApiOperation({ summary: 'Withdraw from Stellar HTLC swap' })
   @ApiResponse({ status: 200, description: 'Withdrawal successful' })
-  async withdrawStellarSwap(@Body() body: { swapId: string; recipient: string; preimage: string }): Promise<{ success: boolean }> {
+  async withdrawStellarSwap(
+    @Body() body: { swapId: string; recipient: string; preimage: string },
+  ): Promise<{ success: boolean }> {
     this.logger.log(`Withdrawing from Stellar HTLC swap: ${body.swapId}`);
-    await this.stellarHtlcService.withdraw(body.swapId, body.recipient, body.preimage);
+    await this.stellarHtlcService.withdraw(
+      body.swapId,
+      body.recipient,
+      body.preimage,
+    );
     return { success: true };
   }
 
   @Post('stellar/refund')
   @ApiOperation({ summary: 'Refund Stellar HTLC swap' })
   @ApiResponse({ status: 200, description: 'Refund successful' })
-  async refundStellarSwap(@Body() body: { swapId: string; sender: string }): Promise<{ success: boolean }> {
+  async refundStellarSwap(
+    @Body() body: { swapId: string; sender: string },
+  ): Promise<{ success: boolean }> {
     this.logger.log(`Refunding Stellar HTLC swap: ${body.swapId}`);
     await this.stellarHtlcService.refund(body.swapId, body.sender);
     return { success: true };
@@ -218,9 +186,14 @@ export class HtlcController {
   @Post('stellar/verify-preimage')
   @ApiOperation({ summary: 'Verify preimage for Stellar HTLC swap' })
   @ApiResponse({ status: 200, description: 'Preimage verification result' })
-  async verifyStellarPreimage(@Body() body: { swapId: string; preimage: string }): Promise<{ valid: boolean }> {
+  async verifyStellarPreimage(
+    @Body() body: { swapId: string; preimage: string },
+  ): Promise<{ valid: boolean }> {
     this.logger.log(`Verifying preimage for Stellar HTLC swap: ${body.swapId}`);
-    const valid = await this.stellarHtlcService.verifyPreimage(body.swapId, body.preimage);
+    const valid = await this.stellarHtlcService.verifyPreimage(
+      body.swapId,
+      body.preimage,
+    );
     return { valid };
   }
 
@@ -260,13 +233,4 @@ export class HtlcController {
   }> {
     return this.relayerService.getStatus();
   }
-
-  @Post('relayer/clear')
-  @ApiOperation({ summary: 'Clear relayer current swap (for stuck relayer)' })
-  @ApiResponse({ status: 200, description: 'Relayer cleared successfully' })
-  async clearRelayer(): Promise<{ success: boolean; message: string }> {
-    this.logger.log('Clearing relayer current swap');
-    this.relayerService.clearCurrentSwap();
-    return { success: true, message: 'Relayer current swap cleared' };
-  }
-} 
+}

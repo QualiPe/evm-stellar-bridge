@@ -26,11 +26,13 @@ export class RelayerService {
   /**
    * Start the relayer service
    */
-  async start(config: RelayerConfig = {
-    pollIntervalMs: 10000, // 10 seconds
-    maxRetries: 3,
-    retryDelayMs: 5000, // 5 seconds
-  }): Promise<void> {
+  start(
+    config: RelayerConfig = {
+      pollIntervalMs: 10000, // 10 seconds
+      maxRetries: 3,
+      retryDelayMs: 5000, // 5 seconds
+    },
+  ) {
     if (this.isRunning) {
       this.logger.warn('Relayer is already running');
       return;
@@ -52,7 +54,7 @@ export class RelayerService {
   stop(): void {
     this.isRunning = false;
     this.logger.log('Stopping HTLC relayer service');
-    
+
     // Remove event listeners
     this.evmHtlcService.removeAllListeners();
   }
@@ -62,10 +64,20 @@ export class RelayerService {
    */
   private setupEvmEventListeners(): void {
     // Listen for funded events
-    this.evmHtlcService.onFunded(async (swapId, sender, recipient, amount, hashlock, timelock) => {
-      this.logger.log(`EVM HTLC funded: ${swapId}`);
-      await this.handleEvmFunded(swapId, sender, recipient, amount, hashlock, timelock);
-    });
+    this.evmHtlcService.onFunded(
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      async (swapId, sender, recipient, amount, hashlock, timelock) => {
+        this.logger.log(`EVM HTLC funded: ${swapId}`);
+        await this.handleEvmFunded(
+          swapId,
+          sender,
+          recipient,
+          amount,
+          hashlock,
+          timelock,
+        );
+      },
+    );
 
     // Listen for withdrawn events
     this.evmHtlcService.onWithdrawn(async (swapId, recipient, preimage) => {
@@ -101,7 +113,7 @@ export class RelayerService {
   private async processActiveSwaps(): Promise<void> {
     // Get all intents with active status
     const activeIntents = this.getActiveIntents();
-    
+
     if (activeIntents.length === 0) {
       // Clear currentSwapId if no active intents
       if (this.currentSwapId) {
@@ -137,7 +149,7 @@ export class RelayerService {
     } catch (error) {
       this.logger.error(`Error processing swap ${intent.id}:`, error);
       this.retryCount++;
-      
+
       if (this.retryCount >= 3) {
         this.intentService.patchStatus(intent.id, 'error');
         this.currentSwapId = null;
@@ -210,7 +222,7 @@ export class RelayerService {
    */
   private async handleEvmLockedSwap(intent: any): Promise<void> {
     this.logger.log(`Handling EVM locked swap: ${intent.id}`);
-    
+
     try {
       // Create Stellar HTLC with same hashlock
       // Convert decimal amount to integer (multiply by 10^6 for USDC)
@@ -235,7 +247,10 @@ export class RelayerService {
       this.intentService.patchStatus(intent.id, 'stellar_locked');
       this.logger.log(`Swap ${intent.id} marked as Stellar locked`);
     } catch (error) {
-      this.logger.error(`Error creating Stellar HTLC for swap ${intent.id}:`, error);
+      this.logger.error(
+        `Error creating Stellar HTLC for swap ${intent.id}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -245,17 +260,22 @@ export class RelayerService {
    */
   private async handleStellarLockedSwap(intent: any): Promise<void> {
     this.logger.log(`Handling Stellar locked swap: ${intent.id}`);
-    
+
     try {
       // Check if Stellar HTLC has been withdrawn
-      const stellarSwap = await this.stellarHtlcService.getSwap(intent.plan.hash);
-      
+      const stellarSwap = await this.stellarHtlcService.getSwap(
+        intent.plan.hash,
+      );
+
       if (stellarSwap && stellarSwap.isWithdrawn) {
         this.intentService.patchStatus(intent.id, 'withdrawn_stellar');
         this.logger.log(`Swap ${intent.id} marked as Stellar withdrawn`);
       }
     } catch (error) {
-      this.logger.error(`Error checking Stellar HTLC for swap ${intent.id}:`, error);
+      this.logger.error(
+        `Error checking Stellar HTLC for swap ${intent.id}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -265,7 +285,7 @@ export class RelayerService {
    */
   private async handleStellarWithdrawnSwap(intent: any): Promise<void> {
     this.logger.log(`Handling Stellar withdrawn swap: ${intent.id}`);
-    
+
     try {
       // Get preimage from intent store
       const intentWithPreimage = this.getIntentWithPreimage(intent.id);
@@ -285,7 +305,10 @@ export class RelayerService {
       this.intentService.patchStatus(intent.id, 'withdrawn_evm');
       this.logger.log(`Swap ${intent.id} marked as EVM withdrawn using SwapId: ${swapId}`);
     } catch (error) {
-      this.logger.error(`Error withdrawing from EVM HTLC for swap ${intent.id}:`, error);
+      this.logger.error(
+        `Error withdrawing from EVM HTLC for swap ${intent.id}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -295,11 +318,11 @@ export class RelayerService {
    */
   private async handleEvmWithdrawnSwap(intent: any): Promise<void> {
     this.logger.log(`Handling EVM withdrawn swap: ${intent.id}`);
-    
+
     // Mark swap as settled
     this.intentService.patchStatus(intent.id, 'settled');
     this.logger.log(`Swap ${intent.id} marked as settled`);
-    
+
     // Clear current swap
     this.currentSwapId = null;
     this.retryCount = 0;
@@ -365,8 +388,10 @@ export class RelayerService {
     
     if (intent) {
       this.intentService.patchStatus(intent.id, 'refunded');
-      this.logger.log(`Intent ${intent.id} marked as refunded due to refund event`);
-      
+      this.logger.log(
+        `Intent ${intent.id} marked as refunded due to refund event`,
+      );
+
       // Clear current swap
       this.currentSwapId = null;
       this.retryCount = 0;
@@ -407,7 +432,7 @@ export class RelayerService {
    * Sleep utility
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
