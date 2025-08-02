@@ -3,7 +3,8 @@ export const cfg = {
     evm: {
       chainId: Number(import.meta.env.VITE_EVM_CHAIN_ID ?? '1'),
       usdc: import.meta.env.VITE_EVM_USDC as `0x${string}`,
-      bridge: import.meta.env.VITE_EVM_BRIDGE as `0x${string}`,
+      htlc: import.meta.env.VITE_EVM_HTLC as `0x${string}`,
+      counterparty: import.meta.env.VITE_EVM_COUNTERPARTY as `0x${string}`,
     },
     stellar: {
       horizon: import.meta.env.VITE_STELLAR_HORIZON,
