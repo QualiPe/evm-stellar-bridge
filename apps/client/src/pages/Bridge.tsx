@@ -1,4 +1,5 @@
 import EvmPanel from '../components/EvmPanel';
+import StellarPanel from '../components/StellarPanel';
 
 export default function Bridge() {
     return (
@@ -16,9 +17,8 @@ export default function Bridge() {
           </section>
   
           <section className="ll-panel" aria-label="Stellar panel">
-            <h2 className="ll-panel-title">Stellar</h2>
-            {/* StellarPanel */}
-          </section>
+            <StellarPanel />
+            </section>
         </div>
       </main>
     );
