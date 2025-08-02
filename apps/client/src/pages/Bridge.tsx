@@ -1,5 +1,6 @@
 import EvmPanel from '../components/EvmPanel';
 import StellarPanel from '../components/StellarPanel';
+import PlanPanel from '../components/PlanPanel';
 
 export default function Bridge() {
     return (
@@ -12,13 +13,12 @@ export default function Bridge() {
           </section>
   
           <section className="ll-panel" aria-label="Plan panel">
-            <h2 className="ll-panel-title">Plan</h2>
-            {/* PlanPanel */}
+            <PlanPanel />
           </section>
   
           <section className="ll-panel" aria-label="Stellar panel">
             <StellarPanel />
-            </section>
+          </section>
         </div>
       </main>
     );
