@@ -1,3 +1,5 @@
+import EvmPanel from '../components/EvmPanel';
+
 export default function Bridge() {
     return (
       <main className="ll-container">
@@ -5,20 +7,19 @@ export default function Bridge() {
   
         <div className="ll-grid">
           <section className="ll-panel" aria-label="EVM panel">
-            <h2 className="ll-panel-title">Ethereum</h2>
-            {/* Here will be EvmPanel */}
+            <EvmPanel />
           </section>
   
           <section className="ll-panel" aria-label="Plan panel">
             <h2 className="ll-panel-title">Plan</h2>
-            {/* Here will be PlanPanel */}
+            {/* PlanPanel */}
           </section>
   
           <section className="ll-panel" aria-label="Stellar panel">
             <h2 className="ll-panel-title">Stellar</h2>
-            {/* Here will be StellarPanel */}
+            {/* StellarPanel */}
           </section>
         </div>
       </main>
     );
-  }
+}
