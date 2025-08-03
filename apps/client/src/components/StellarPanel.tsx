@@ -124,11 +124,6 @@ export default function StellarPanel() {
           <button className="btn" onClick={connect}>Connect Freighter</button>
           {warning && <div className="ll-muted" style={{ color: '#b45309', marginTop: 8 }}>{warning}</div>}
           {error && <div style={{ color: '#b91c1c', marginTop: 8 }}>{error}</div>}
-          {!error && !warning && (
-            <div className="ll-muted" style={{ marginTop: 8 }}>
-              Expected network: <b>{expected}</b>
-            </div>
-          )}
         </>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

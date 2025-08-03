@@ -46,7 +46,7 @@ function AmountInput({
     )
 }
 
-function TokenSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: Token[] }) {
+function TokenSelect({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: Token[], placeholder: string }) {
     return (
         <select
             value={value}
@@ -58,9 +58,11 @@ function TokenSelect({ value, onChange, options }: { value: string; onChange: (v
                 border: '1px solid #d1d5db',
                 background: '#fff',
                 fontSize: '14px',
-                appearance: 'none'
+                appearance: 'none',
+                color: value ? 'inherit' : '#6b7280'
             }}
         >
+            <option value="" disabled>{placeholder}</option>
             {options.map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
         </select>
     )
@@ -86,14 +88,17 @@ export default function PlanPanel() {
   const fromTokens = direction === 'EVM_TO_STELLAR' ? EVM_TOKENS : STELLAR_TOKENS;
   const toTokens = direction === 'EVM_TO_STELLAR' ? STELLAR_TOKENS : EVM_TOKENS;
 
-  const [fromToken, setFromToken] = useState<string>(fromTokens[0].id);
-  const [toToken, setToToken] = useState<string>(toTokens[0].id);
+  const [fromToken, setFromToken] = useState<string>('');
+  const [toToken, setToToken] = useState<string>('');
   
   // When direction changes, update tokens
   useEffect(() => {
-    setFromToken(fromTokens[0].id);
-    setToToken(toTokens[0].id);
-  }, [direction]);
+    setFromToken('');
+    setToToken('');
+    setAmountIn('');
+    setAmountOut('');
+        setIntent(undefined);
+  }, [direction, setIntent]);
   
   const selectedFromToken = useMemo(() => fromTokens.find(t => t.id === fromToken), [fromTokens, fromToken]);
   const selectedToToken = useMemo(() => toTokens.find(t => t.id === toToken), [toTokens, toToken]);
@@ -245,27 +250,27 @@ export default function PlanPanel() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', alignItems: 'start' }}>
             {/* From */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <TokenSelect value={fromToken} onChange={setFromToken} options={fromTokens} />
+                <TokenSelect value={fromToken} onChange={setFromToken} options={fromTokens} placeholder="Select token" />
                 <AmountInput 
                     label="You send"
                     value={amountIn}
                     onChange={setAmountIn}
                     token={selectedFromToken}
-                    disabled={!!amountOut}
-                    placeholder={!amountIn && !amountOut ? 'Enter amount' : 'Click "Get Quote" to calculate'}
+                    disabled={!!amountOut || !fromToken || !toToken}
+                    placeholder={!fromToken || !toToken ? "Select tokens first" : (!amountIn && !amountOut ? 'Enter amount' : 'Click "Get Quote" to calculate')}
                 />
             </div>
             
             {/* To */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <TokenSelect value={toToken} onChange={setToToken} options={toTokens} />
+                <TokenSelect value={toToken} onChange={setToToken} options={toTokens} placeholder="Select token" />
                 <AmountInput 
                     label="You receive"
                     value={amountOut}
                     onChange={setAmountOut}
                     token={selectedToToken}
-                    disabled={!!amountIn}
-                    placeholder={!amountIn && !amountOut ? 'Enter amount' : 'Click "Get Quote" to calculate'}
+                    disabled={!!amountIn || !fromToken || !toToken}
+                    placeholder={!fromToken || !toToken ? "Select tokens first" : (!amountIn && !amountOut ? 'Enter amount' : 'Click "Get Quote" to calculate')}
                 />
             </div>
         </div>
@@ -281,7 +286,7 @@ export default function PlanPanel() {
           <button
             className="btn"
             onClick={onGetQuote}
-            disabled={create.isPending || !toAddress || (!amountIn && !amountOut)}
+            disabled={create.isPending || !toAddress || (!amountIn && !amountOut) || !fromToken || !toToken}
             title={!toAddress ? 'Connect destination wallet first' : ''}
             style={{ 
                 width: '100%', 
