@@ -1,9 +1,9 @@
 require('dotenv').config();
 const axios = require('axios');
 
-async function testFinalSwapIdFlow() {
-  console.log('🎯 FINAL TEST: COMPLETE SWAPID FLOW');
-  console.log('====================================\n');
+async function testRelayerEvm() {
+  console.log('🎯 RELAYER EVM TEST: COMPLETE SWAPID FLOW');
+  console.log('==========================================\n');
 
   try {
     // Step 1: Create an intent
@@ -115,4 +115,4 @@ async function testFinalSwapIdFlow() {
   }
 }
 
-testFinalSwapIdFlow(); 
+testRelayerEvm(); 
