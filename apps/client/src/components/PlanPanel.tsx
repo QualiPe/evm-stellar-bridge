@@ -10,53 +10,53 @@ import { cfg } from '../config';
 import { formatUnits } from '../utils/units';
 import { EVM_TOKENS, STELLAR_TOKENS, getTokenName } from '../tokens';
 
+// ... sub-components
 function PanelSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: '16px' }}>
-      <h3 style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: 500 }}>{title}</h3>
-      {children}
-    </div>
-  );
-}
-
-function TokenInput({ value, onChange, disabled = false }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
-  return (
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      disabled={disabled}
-      style={{
-        width: '100%',
-        padding: '10px 12px',
-        borderRadius: '8px',
-        border: '1px solid #d1d5db',
-        background: disabled ? '#f3f4f6' : '#fff',
-        fontSize: '14px',
-      }}
-    />
-  );
-}
-
-function TokenSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: {id: string, name: string}[] }) {
     return (
-        <select
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '8px',
-                border: '1px solid #d1d5db',
-                background: '#fff',
-                fontSize: '14px',
-                appearance: 'none'
-            }}
-        >
-            {options.map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
-        </select>
-    )
-}
-
+      <div style={{ marginBottom: '16px' }}>
+        <h3 style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: 500 }}>{title}</h3>
+        {children}
+      </div>
+    );
+  }
+  
+  function TokenInput({ value, onChange, disabled = false }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+    return (
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        style={{
+          width: '100%',
+          padding: '10px 12px',
+          borderRadius: '8px',
+          border: '1px solid #d1d5db',
+          background: disabled ? '#f3f4f6' : '#fff',
+          fontSize: '14px',
+        }}
+      />
+    );
+  }
+  
+  function TokenSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: {id: string, name: string}[] }) {
+      return (
+          <select
+              value={value}
+              onChange={e => onChange(e.target.value)}
+              style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #d1d5db',
+                  background: '#fff',
+                  fontSize: '14px',
+                  appearance: 'none'
+              }}
+          >
+              {options.map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+          </select>
+      )
+  }
 
 export default function PlanPanel() {
   const { address: evmWalletAddress, isConnected, chainId } = useAccount();
@@ -121,7 +121,7 @@ export default function PlanPanel() {
         const need = BigInt(Math.ceil(parseFloat(intent.plan.minLock.evm) * 10 ** 6));
         if (live) setBalanceOk(bal >= need);
       } catch {
-        if (live) setBalanceOk(true); // default to true to avoid blocking UI on error
+        if (live) setBalanceOk(true);
       } finally {
         if (live) setCheckingBal(false);
       }
@@ -182,7 +182,8 @@ export default function PlanPanel() {
 
   return (
     <div>
-      <h2 className="ll-panel-title" style={{ marginTop: 0 }}>
+        {intent && <Steps intent={intent} />}
+      <h2 className="ll-panel-title" style={{ marginTop: intent ? '24px' : 0 }}>
         Create a Swap
       </h2>
 
@@ -270,7 +271,6 @@ export default function PlanPanel() {
             Intent ID: {intent.id}
           </div>
           <QuoteDetails intent={intent} pretty={pretty} />
-          <Steps intent={intent} />
         </div>
       )}
 
@@ -285,60 +285,60 @@ export default function PlanPanel() {
 
 // ... QuoteDetails component remains the same
 function QuoteDetails({ intent, pretty }: { intent: Intent; pretty: (s?: string | null, dp?: number) => string }) {
-  const sum = intent.plan.summary;
-  const mode = sum?.mode ?? intent.plan.mode;
-
-  let youPayHuman: string | undefined;
-  if (mode === 'EXACT_OUT') {
-    youPayHuman = intent.plan.amountInEstimated || sum?.src.amountHuman;
-  } else {
-    youPayHuman = intent.request.amountIn || sum?.src.amountHuman;
-  }
-
-  let bridgeEvm = sum?.bridge.evmUSDC.human;
-  let bridgeStellar = sum?.bridge.stellarUSDC.human;
-
-  if (!bridgeEvm && intent.plan.evmLeg?.toAmountMinor) {
-    try {
-      bridgeEvm = formatUnits(BigInt(intent.plan.evmLeg.toAmountMinor), 6);
-    } catch {}
-  }
-  if (!bridgeStellar && bridgeEvm) bridgeStellar = bridgeEvm;
-
-  let youReceiveHuman: string | undefined;
-  if (mode === 'EXACT_OUT') {
-    youReceiveHuman = sum?.dst.amountHuman || intent.request.amountOut;
-  } else {
-    youReceiveHuman = sum?.dst.amountHuman || intent.plan.stellarLeg?.destAmount || intent.request.amountOut;
-  }
-
-  const srcToken = getTokenName(sum?.src.token ?? intent.request.fromToken);
-  const dstToken = getTokenName(sum?.dst.token ?? intent.request.toToken);
-
-  const DetailRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
-      <span style={{ color: '#6b7280' }}>{label}</span>
-      <span style={{ fontWeight: 500, textAlign: 'right' }}>{value}</span>
-    </div>
-  );
-
-  return (
-    <div style={{ marginBottom: '16px' }}>
-      <DetailRow label={`You pay (${srcToken})`} value={pretty(youPayHuman)} />
-      <DetailRow label="Bridged (USDC)" value={`${pretty(bridgeEvm)} → ${pretty(bridgeStellar)}`} />
-      <DetailRow label={`You receive (${dstToken})`} value={pretty(youReceiveHuman)} />
-
-      <div style={{ marginTop: '12px', fontSize: '12px', color: '#6b7280' }}>
-        <div>Hash: <span style={{ fontFamily: 'monospace' }}>{intent.plan.hash}</span></div>
-        <div>
-          Timelocks: ETH {intent.plan.timelocks.ethSec}s · STELLAR {intent.plan.timelocks.stellarSec}s
-        </div>
-        {sum?.quoteTtlSec != null && (
-          <div>
-            Quote TTL: {sum.quoteTtlSec}s
-          </div>
-        )}
+    const sum = intent.plan.summary;
+    const mode = sum?.mode ?? intent.plan.mode;
+  
+    let youPayHuman: string | undefined;
+    if (mode === 'EXACT_OUT') {
+      youPayHuman = intent.plan.amountInEstimated || sum?.src.amountHuman;
+    } else {
+      youPayHuman = intent.request.amountIn || sum?.src.amountHuman;
+    }
+  
+    let bridgeEvm = sum?.bridge.evmUSDC.human;
+    let bridgeStellar = sum?.bridge.stellarUSDC.human;
+  
+    if (!bridgeEvm && intent.plan.evmLeg?.toAmountMinor) {
+      try {
+        bridgeEvm = formatUnits(BigInt(intent.plan.evmLeg.toAmountMinor), 6);
+      } catch {}
+    }
+    if (!bridgeStellar && bridgeEvm) bridgeStellar = bridgeEvm;
+  
+    let youReceiveHuman: string | undefined;
+    if (mode === 'EXACT_OUT') {
+      youReceiveHuman = sum?.dst.amountHuman || intent.request.amountOut;
+    } else {
+      youReceiveHuman = sum?.dst.amountHuman || intent.plan.stellarLeg?.destAmount || intent.request.amountOut;
+    }
+  
+    const srcToken = getTokenName(sum?.src.token ?? intent.request.fromToken);
+    const dstToken = getTokenName(sum?.dst.token ?? intent.request.toToken);
+  
+    const DetailRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
+      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
+        <span style={{ color: '#6b7280' }}>{label}</span>
+        <span style={{ fontWeight: 500, textAlign: 'right' }}>{value}</span>
       </div>
-    </div>
-  );
-}
+    );
+  
+    return (
+      <div style={{ marginBottom: '16px' }}>
+        <DetailRow label={`You pay (${srcToken})`} value={pretty(youPayHuman)} />
+        <DetailRow label="Bridged (USDC)" value={`${pretty(bridgeEvm)} → ${pretty(bridgeStellar)}`} />
+        <DetailRow label={`You receive (${dstToken})`} value={pretty(youReceiveHuman)} />
+  
+        <div style={{ marginTop: '12px', fontSize: '12px', color: '#6b7280' }}>
+          <div>Hash: <span style={{ fontFamily: 'monospace' }}>{intent.plan.hash}</span></div>
+          <div>
+            Timelocks: ETH {intent.plan.timelocks.ethSec}s · STELLAR {intent.plan.timelocks.stellarSec}s
+          </div>
+          {sum?.quoteTtlSec != null && (
+            <div>
+              Quote TTL: {sum.quoteTtlSec}s
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }

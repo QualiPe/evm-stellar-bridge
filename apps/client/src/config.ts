@@ -12,6 +12,7 @@ export const cfg = {
     htlc: import.meta.env.VITE_STELLAR_HTLC,
     usdcIssuer: import.meta.env.VITE_STELLAR_USDC,
     rpc: import.meta.env.VITE_SOROBAN_RPC,
+    horizon: import.meta.env.VITE_STELLAR_HORIZON,
     counterparty: import.meta.env.VITE_STELLAR_COUNTERPARTY,
   },
   flags: {

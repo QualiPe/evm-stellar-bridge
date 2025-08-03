@@ -2,8 +2,8 @@
 
 :root {
   /* layout */
-  --gap: 16px;
-  --container: 1200px;
+  --gap: 24px;
+  --container: 1400px;
   --radius: 12px;
 
   /* colors */
@@ -61,7 +61,8 @@ body {
 
 @media (min-width: 1024px) {
   .ll-grid {
-    grid-template-columns: 1fr 1.2fr 1fr;
+    /* Make center column wider */
+    grid-template-columns: 320px 1.5fr 320px;
   }
 }
 
@@ -132,4 +133,28 @@ body {
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.btn-secondary {
+    background: transparent;
+    border-color: #d1d5db;
+    color: #4b5563;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #f9fafb;
+    border-color: #9ca3af;
+    box-shadow: none;
+}
+
+.btn-danger {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #b91c1c;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #fecaca;
+    border-color: #f87171;
+    box-shadow: none;
 }
