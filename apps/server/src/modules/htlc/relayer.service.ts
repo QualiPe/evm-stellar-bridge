@@ -4,6 +4,7 @@ import { StellarHtlcService } from './stellar-htlc.service';
 import { IntentService } from '../intent/intent.service';
 import { Intent, IntentStatus } from '../../shared/types';
 import { startStellarMonitoring } from './stellar-monitoring';
+import { ENV as env } from '../../shared/config.module';
 
 export interface RelayerConfig {
   pollIntervalMs: number;
@@ -201,7 +202,7 @@ export class RelayerService implements OnModuleInit {
         await this.handleCreatedSwap(intent);
         break;
       case 'evm_locked':
-        this.handleEvmLockedSwap(intent);
+        await this.handleEvmLockedSwap(intent);
         break;
       case 'stellar_locked':
         await this.handleStellarLockedSwap(intent);
@@ -265,7 +266,7 @@ export class RelayerService implements OnModuleInit {
   /**
    * Handle EVM locked swap - create Stellar HTLC
    */
-  private handleEvmLockedSwap(intent: Intent): void {
+  private async handleEvmLockedSwap(intent: Intent): Promise<void> {
     this.logger.log(`Handling EVM locked swap: ${intent.id}`);
 
     try {
@@ -283,16 +284,13 @@ export class RelayerService implements OnModuleInit {
         );
       }
 
-      // TODO
-      // await this.stellarHtlcService.createSwap({
-      //   swapId: intent.plan.hash,
-      //   sender: intent.request.toAddress, // Recipient on EVM becomes sender on Stellar
-      //   recipient: intent.request.toAddress,
-      //   token: 'USDC',
-      //   amount: BigInt(stellarAmount),
-      //   hashlock: intent.plan.hash,
-      //   timelock: BigInt(timelockValue),
-      // });
+      await this.stellarHtlcService.fund({
+        recipient: intent.request.toAddress,
+        tokenId: env.STELLAR_TOKEN_ID,
+        amount: intent.plan.minLock.stellar,
+        timelockHours: timelockValue,
+        secret: intent.plan.hash,
+      });
 
       this.intentService.patchStatus(intent.id, 'stellar_locked');
       this.logger.log(`Swap ${intent.id} marked as Stellar locked`);
