@@ -8,6 +8,34 @@ import { formatUnits } from '../utils/units';
 
 const WETH_MAINNET = '0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2';
 
+// New sub-components for better structure and styling
+function PanelSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      <h3 style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px', fontWeight: 500 }}>{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function TokenInput({ value, onChange, disabled = false }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      style={{
+        width: '100%',
+        padding: '10px 12px',
+        borderRadius: '8px',
+        border: '1px solid #d1d5db',
+        background: disabled ? '#f3f4f6' : '#fff',
+        fontSize: '14px',
+      }}
+    />
+  );
+}
+
 export default function PlanPanel() {
   const {
     direction,
@@ -31,7 +59,6 @@ export default function PlanPanel() {
 
   const create = useCreateIntent();
 
-  // polling intent status
   const { data: polledIntent } = useIntent(intentId);
   useEffect(() => {
     if (polledIntent) setIntent(polledIntent);
@@ -72,58 +99,49 @@ export default function PlanPanel() {
 
   return (
     <div>
-      <h2 className="ll-panel-title" style={{ marginTop: 0 }}>Plan</h2>
+      <h2 className="ll-panel-title" style={{ marginTop: 0 }}>
+        Create a Swap
+      </h2>
 
       {/* Form */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8, marginBottom: 8 }}>
-        <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <button className="btn" onClick={swapDirection}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <PanelSection title="Direction">
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn" onClick={swapDirection} style={{ flex: 1 }}>
               {direction === 'EVM_TO_STELLAR' ? 'EVM → Stellar' : 'Stellar → EVM'}
             </button>
             <select
               className="btn"
               value={mode}
               onChange={(e) => setMode(e.target.value as AmountMode)}
+              style={{ flex: 1 }}
             >
-              <option value="EXACT_OUT">EXACT_OUT</option>
-              <option value="EXACT_IN">EXACT_IN</option>
+              <option value="EXACT_OUT">Exact Out</option>
+              <option value="EXACT_IN">Exact In</option>
             </select>
-            {cfg.flags.directUsdcMode && (
-              <span className="ll-muted" style={{ paddingTop: 8 }}>
-                <b>MVP:</b> only USDC lock is executed
-              </span>
-            )}
           </div>
+        </PanelSection>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-            <div>
-              <div className="ll-muted">From token</div>
-              <input value={fromToken} onChange={(e) => setFromToken(e.target.value)} />
-            </div>
-            <div>
-              <div className="ll-muted">To token</div>
-              <input value={toToken} onChange={(e) => setToToken(e.target.value)} />
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div>
-              <div className="ll-muted">
-                {mode === 'EXACT_OUT' ? 'Desired output (human)' : 'Amount in (human)'}
-              </div>
-              <input
-                value={amountOut}
-                onChange={(e) => setAmountOut(e.target.value)}
-                placeholder={mode === 'EXACT_OUT' ? 'e.g., 100' : 'e.g., 1.23'}
-              />
-            </div>
-            <div>
-              <div className="ll-muted">Recipient (auto)</div>
-              <input value={toAddress} readOnly placeholder="Connect wallet to autofill" />
-            </div>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 24px 1fr', gap: '8px', alignItems: 'center' }}>
+          <PanelSection title="From Token">
+            <TokenInput value={fromToken} onChange={setFromToken} />
+          </PanelSection>
+          <div style={{ textAlign: 'center', paddingTop: '24px' }}>→</div>
+          <PanelSection title="To Token">
+            <TokenInput value={toToken} onChange={setToToken} />
+          </PanelSection>
         </div>
+
+        <PanelSection title={mode === 'EXACT_OUT' ? 'Desired Output Amount' : 'Input Amount'}>
+          <TokenInput
+            value={amountOut}
+            onChange={setAmountOut}
+          />
+        </PanelSection>
+        
+        <PanelSection title="Recipient Address">
+          <TokenInput value={toAddress} onChange={() => {}} disabled />
+        </PanelSection>
 
         <div>
           <button
@@ -131,116 +149,92 @@ export default function PlanPanel() {
             onClick={onGetQuote}
             disabled={create.isPending || !toAddress}
             title={!toAddress ? 'Connect destination wallet first' : ''}
+            style={{ width: '100%', padding: '12px' }}
           >
-            {create.isPending ? 'Quoting…' : 'Get quote'}
+            {create.isPending ? 'Getting Quote…' : 'Get Quote'}
           </button>
         </div>
       </div>
 
       {/* Result — plan */}
       {intent && (
-        <div style={{ marginTop: 12, background: '#f9fafb', padding: 12, borderRadius: 8 }}>
-            {(() => {
-            const sum = intent.plan.summary;
-            const mode = sum?.mode ?? intent.plan.mode;
-
-            let youPayHuman: string | undefined;
-            if (mode === 'EXACT_OUT') {
-                youPayHuman = intent.plan.amountInEstimated || sum?.src.amountHuman;
-            } else {
-                youPayHuman = intent.request.amountIn || sum?.src.amountHuman;
-            }
-
-            let bridgeEvm = sum?.bridge.evmUSDC.human;
-            let bridgeStellar = sum?.bridge.stellarUSDC.human;
-
-            if (!bridgeEvm && intent.plan.evmLeg?.toAmountMinor) {
-                try {
-                bridgeEvm = formatUnits(BigInt(intent.plan.evmLeg.toAmountMinor), 6);
-                } catch {}
-            }
-            if (!bridgeStellar && bridgeEvm) bridgeStellar = bridgeEvm;
-
-            let youReceiveHuman: string | undefined;
-            if (mode === 'EXACT_OUT') {
-                youReceiveHuman = sum?.dst.amountHuman || intent.request.amountOut;
-            } else {
-                youReceiveHuman = sum?.dst.amountHuman
-                || intent.plan.stellarLeg?.destAmount
-                || intent.request.amountOut;
-            }
-
-            const srcToken = sum?.src.token ?? intent.request.fromToken;
-            const dstToken = sum?.dst.token ?? intent.request.toToken;
-
-            return (
-                <div>
-                <div className="ll-muted">Intent: {intent.id}</div>
-                <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-                    {/* You pay */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <div><strong>You pay</strong> ({srcToken})</div>
-                    <div>{pretty(youPayHuman)}</div>
-                    </div>
-
-                    {/* Bridged */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <div><strong>Bridged</strong> (USDC on EVM → Stellar)</div>
-                    <div>
-                        {pretty(bridgeEvm)} USDC → {pretty(bridgeStellar)} USDC
-                    </div>
-                    </div>
-
-                    {/* You receive */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <div><strong>You receive</strong> ({dstToken})</div>
-                    <div>{pretty(youReceiveHuman)}</div>
-                    </div>
-                </div>
-
-                {/* Routes details */}
-                <div style={{ marginTop: 12, borderTop: '1px solid #e5e7eb', paddingTop: 8 }}>
-                    <div>Hash: {intent.plan.hash}</div>
-                    <div>
-                    Timelocks: ETH {intent.plan.timelocks.ethSec}s · STELLAR {intent.plan.timelocks.stellarSec}s
-                    </div>
-
-                    <div style={{ marginTop: 8 }}>
-                    <strong>Route</strong>
-                    <ul style={{ margin: 0, paddingLeft: 18 }}>
-                        {intent.plan.evmLeg && (
-                        <li>
-                            EVM leg: {intent.plan.evmLeg.from} → {intent.plan.evmLeg.to}
-                            {' '} (via {intent.plan.evmLeg.via})
-                        </li>
-                        )}
-                        {intent.plan.stellarLeg && (
-                        <li>
-                            Stellar leg: {intent.plan.stellarLeg.via}
-                            {intent.plan.stellarLeg.path?.length
-                            ? ` (path length ${intent.plan.stellarLeg.path.length})`
-                            : ''}
-                        </li>
-                        )}
-                    </ul>
-                    </div>
-
-                    {sum?.quoteTtlSec != null && (
-                    <div className="ll-muted" style={{ marginTop: 6 }}>
-                        Quote TTL: {sum.quoteTtlSec}s
-                    </div>
-                    )}
-                <Steps intent={intent} />
-                </div>
-                </div>
-            );
-            })()}
+        <div style={{ marginTop: '24px', background: '#f9fafb', padding: '16px', borderRadius: '12px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px' }}>
+            Quote details
+          </h3>
+          <div style={{ fontSize: '12px', color: '#6b7280', wordBreak: 'break-all', marginBottom: '12px' }}>
+            Intent ID: {intent.id}
+          </div>
+          <QuoteDetails intent={intent} pretty={pretty} />
+          <Steps intent={intent} />
         </div>
-        )}
+      )}
 
       {create.isError && (
-        <div style={{ color: '#b91c1c', marginTop: 8 }}>{(create.error as Error).message}</div>
+        <div style={{ color: '#ef4444', marginTop: '12px', fontWeight: 500 }}>
+          {(create.error as Error).message}
+        </div>
       )}
+    </div>
+  );
+}
+
+// Extracted Quote Details to a new component
+function QuoteDetails({ intent, pretty }: { intent: Intent; pretty: (s?: string | null, dp?: number) => string }) {
+  const sum = intent.plan.summary;
+  const mode = sum?.mode ?? intent.plan.mode;
+
+  let youPayHuman: string | undefined;
+  if (mode === 'EXACT_OUT') {
+    youPayHuman = intent.plan.amountInEstimated || sum?.src.amountHuman;
+  } else {
+    youPayHuman = intent.request.amountIn || sum?.src.amountHuman;
+  }
+
+  let bridgeEvm = sum?.bridge.evmUSDC.human;
+  let bridgeStellar = sum?.bridge.stellarUSDC.human;
+
+  if (!bridgeEvm && intent.plan.evmLeg?.toAmountMinor) {
+    try {
+      bridgeEvm = formatUnits(BigInt(intent.plan.evmLeg.toAmountMinor), 6);
+    } catch {}
+  }
+  if (!bridgeStellar && bridgeEvm) bridgeStellar = bridgeEvm;
+
+  let youReceiveHuman: string | undefined;
+  if (mode === 'EXACT_OUT') {
+    youReceiveHuman = sum?.dst.amountHuman || intent.request.amountOut;
+  } else {
+    youReceiveHuman = sum?.dst.amountHuman || intent.plan.stellarLeg?.destAmount || intent.request.amountOut;
+  }
+
+  const srcToken = sum?.src.token ?? intent.request.fromToken;
+  const dstToken = sum?.dst.token ?? intent.request.toToken;
+
+  const DetailRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
+      <span style={{ color: '#6b7280' }}>{label}</span>
+      <span style={{ fontWeight: 500, textAlign: 'right' }}>{value}</span>
+    </div>
+  );
+
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      <DetailRow label={`You pay (${srcToken})`} value={pretty(youPayHuman)} />
+      <DetailRow label="Bridged (USDC)" value={`${pretty(bridgeEvm)} → ${pretty(bridgeStellar)}`} />
+      <DetailRow label={`You receive (${dstToken})`} value={pretty(youReceiveHuman)} />
+
+      <div style={{ marginTop: '12px', fontSize: '12px', color: '#6b7280' }}>
+        <div>Hash: <span style={{ fontFamily: 'monospace' }}>{intent.plan.hash}</span></div>
+        <div>
+          Timelocks: ETH {intent.plan.timelocks.ethSec}s · STELLAR {intent.plan.timelocks.stellarSec}s
+        </div>
+        {sum?.quoteTtlSec != null && (
+          <div>
+            Quote TTL: {sum.quoteTtlSec}s
+          </div>
+        )}
+      </div>
     </div>
   );
 }
