@@ -44,20 +44,26 @@ export function useEvm() {
     })) as bigint;
 
     if (allowance < amount) {
-      await writeContractAsync({
+      const approveHash = await writeContractAsync({
         address: usdc,
         abi: erc20Abi,
         functionName: 'approve',
         args: [htlc, amount],
       });
-      // Wait for approval transaction
-      await new Promise(resolve => {
-        const checkReceipt = () => {
-          if (isSuccess) resolve(undefined);
-          else setTimeout(checkReceipt, 1000);
-        };
-        checkReceipt();
-      });
+    
+      if (!publicClient) throw new Error('Public client is not defined');
+      await publicClient.waitForTransactionReceipt({ hash: approveHash });
+    
+      const newAllowance = (await publicClient.readContract({
+        address: usdc,
+        abi: erc20Abi,
+        functionName: 'allowance',
+        args: [address!, htlc],
+      })) as bigint;
+    
+      if (newAllowance < amount) {
+        throw new Error('Approve failed: allowance still too low');
+      }
     }
 
     const lockHash = await writeContractAsync({
