@@ -5,11 +5,6 @@ import {
   EvmFundParams,
   EvmSwapDetails,
 } from './evm-htlc.service';
-import {
-  StellarHtlcService,
-  StellarFundParams,
-  StellarSwapDetails,
-} from './stellar-htlc.service';
 import { RelayerService } from './relayer.service';
 
 @ApiTags('htlc')
@@ -19,7 +14,6 @@ export class HtlcController {
 
   constructor(
     private readonly evmHtlcService: EvmHtlcService,
-    private readonly stellarHtlcService: StellarHtlcService,
     private readonly relayerService: RelayerService,
   ) {}
 
@@ -39,31 +33,6 @@ export class HtlcController {
       };
     } catch (error) {
       this.logger.error('Error getting EVM status:', error);
-      return {
-        status: 'error',
-        error: error.message,
-        timestamp: new Date().toISOString(),
-      };
-    }
-  }
-
-  @Get('stellar/status')
-  @ApiOperation({ summary: 'Get Stellar HTLC service status' })
-  @ApiResponse({ status: 200, description: 'Service status' })
-  async getStellarStatus() {
-    try {
-      const contractAddress = process.env.STELLAR_HTLC_CONTRACT_ADDRESS;
-      const network = process.env.STELLAR_NETWORK || 'testnet';
-
-      return {
-        status: 'operational',
-        contractAddress: contractAddress,
-        network: network,
-        message: 'Stellar HTLC service connected to deployed Soroban contract',
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      this.logger.error('Error getting Stellar status:', error);
       return {
         status: 'error',
         error: error.message,
@@ -133,75 +102,6 @@ export class HtlcController {
     this.logger.log(`Refunding EVM HTLC swap: ${body.swapId}`);
     await this.evmHtlcService.refund(body.swapId);
     return { success: true };
-  }
-
-  // Stellar HTLC endpoints
-  @Get('stellar/swap/:swapId')
-  @ApiOperation({ summary: 'Get Stellar swap details' })
-  @ApiResponse({ status: 200, description: 'Swap details', type: Object })
-  async getStellarSwap(
-    @Param('swapId') swapId: string,
-  ): Promise<StellarSwapDetails | null> {
-    this.logger.log(`Getting Stellar swap details for: ${swapId}`);
-    return await this.stellarHtlcService.getSwap(swapId);
-  }
-
-  @Post('stellar/create')
-  @ApiOperation({ summary: 'Create a new Stellar HTLC swap' })
-  @ApiResponse({ status: 201, description: 'Swap created successfully' })
-  async createStellarSwap(
-    @Body() params: StellarFundParams,
-  ): Promise<{ success: boolean }> {
-    this.logger.log(`Creating Stellar HTLC swap: ${JSON.stringify(params)}`);
-    await this.stellarHtlcService.createSwap(params);
-    return { success: true };
-  }
-
-  @Post('stellar/withdraw')
-  @ApiOperation({ summary: 'Withdraw from Stellar HTLC swap' })
-  @ApiResponse({ status: 200, description: 'Withdrawal successful' })
-  async withdrawStellarSwap(
-    @Body() body: { swapId: string; recipient: string; preimage: string },
-  ): Promise<{ success: boolean }> {
-    this.logger.log(`Withdrawing from Stellar HTLC swap: ${body.swapId}`);
-    await this.stellarHtlcService.withdraw(
-      body.swapId,
-      body.recipient,
-      body.preimage,
-    );
-    return { success: true };
-  }
-
-  @Post('stellar/refund')
-  @ApiOperation({ summary: 'Refund Stellar HTLC swap' })
-  @ApiResponse({ status: 200, description: 'Refund successful' })
-  async refundStellarSwap(
-    @Body() body: { swapId: string; sender: string },
-  ): Promise<{ success: boolean }> {
-    this.logger.log(`Refunding Stellar HTLC swap: ${body.swapId}`);
-    await this.stellarHtlcService.refund(body.swapId, body.sender);
-    return { success: true };
-  }
-
-  @Post('stellar/verify-preimage')
-  @ApiOperation({ summary: 'Verify preimage for Stellar HTLC swap' })
-  @ApiResponse({ status: 200, description: 'Preimage verification result' })
-  async verifyStellarPreimage(
-    @Body() body: { swapId: string; preimage: string },
-  ): Promise<{ valid: boolean }> {
-    this.logger.log(`Verifying preimage for Stellar HTLC swap: ${body.swapId}`);
-    const valid = await this.stellarHtlcService.verifyPreimage(
-      body.swapId,
-      body.preimage,
-    );
-    return { valid };
-  }
-
-  @Get('stellar/swaps')
-  @ApiOperation({ summary: 'Get all Stellar swaps (debugging)' })
-  @ApiResponse({ status: 200, description: 'All swaps' })
-  async getAllStellarSwaps(): Promise<StellarSwapDetails[]> {
-    return this.stellarHtlcService.getAllSwaps();
   }
 
   // Relayer endpoints

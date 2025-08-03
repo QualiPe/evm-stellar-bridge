@@ -10,6 +10,16 @@ export interface CreateClientOptions {
   signerKeypair: Keypair;
 }
 
+export interface CreateSwapOptions {
+  swapId: Buffer;
+  sender: string;
+  recipient: string;
+  tokenId: string;
+  amount: bigint;
+  timelockHours: number;
+  secret: string;
+}
+
 export class HTLCClient {
   private client: Client;
   private server: rpc.Server;
@@ -50,15 +60,7 @@ export class HTLCClient {
   }
 
   // HTLC Operations
-  async createSwap(
-    sender: string,
-    recipient: string,
-    tokenId: string,
-    amount: bigint,
-    timelockHours: number = 10
-  ) {
-    const swapId = crypto.randomBytes(32);
-    const secret = "secret123";
+  async createSwap({ swapId, sender, recipient, tokenId, amount, timelockHours, secret }: CreateSwapOptions) {
     const hashedSecret = crypto.createHash("sha256").update(secret).digest("hex");
     const timestamp = Math.floor(Date.now() / 1000);
 
@@ -311,16 +313,7 @@ export const sendPayment = async (
   return paymentResponse;
 };
 
-export const createSwap = async (
-  client: Client,
-  sender: string,
-  recipient: string,
-  tokenId: string,
-  amount: bigint,
-  timelockHours: number = 10
-) => {
-  const swapId = crypto.randomBytes(32);
-  const secret = "secret123";
+export const createSwap = async (client: Client, { swapId, sender, recipient, tokenId, amount, timelockHours, secret }: CreateSwapOptions) => {
   const hashedSecret = crypto.createHash("sha256").update(secret).digest("hex");
   const timestamp = Math.floor(Date.now() / 1000);
 
