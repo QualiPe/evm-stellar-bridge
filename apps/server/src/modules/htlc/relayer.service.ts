@@ -32,12 +32,22 @@ export class RelayerService implements OnModuleInit {
     void startStellarMonitoring({
       created: (swap) => {
         this.logger.log(`Stellar HTLC created: ${swap.swapId}`);
+        this.intentService.patchStatus(swap.swapId, 'stellar_locked');
       },
       withdrawn: (swap) => {
         this.logger.log(`Stellar HTLC withdrawn: ${swap.swapId}`);
+        this.intentService.patchStatus(swap.swapId, 'withdrawn_stellar');
+        // TODO: Init withdrawal on EVM using preimage
+        this.evmHtlcService.withdraw(swap.swapId, swap.preimage).catch((e) => {
+          this.logger.error(
+            `Error withdrawing from EVM HTLC for swap ${swap.swapId}:`,
+            e,
+          );
+        });
       },
       refunded: (swap) => {
         this.logger.log(`Stellar HTLC refunded: ${swap.swapId}`);
+        this.intentService.patchStatus(swap.swapId, 'refunded');
       },
     });
   }
