@@ -1,14 +1,15 @@
 import { useMemo, useState, useEffect } from 'react';
+import { useAccount, usePublicClient } from 'wagmi';
 import { useApp } from '../state/appStore';
-import { useCreateIntent, useIntent } from '../hooks/useIntent';
+import { useCreateIntent, useIntent, usePatchIntent } from '../hooks/useIntent';
+import { useEvm } from '../hooks/useEvm';
+
 import Steps from './Steps';
 import type { AmountMode, Direction, CreateIntentInput, Intent } from '../types/intent';
 import { cfg } from '../config';
 import { formatUnits } from '../utils/units';
+import { EVM_TOKENS, STELLAR_TOKENS, getTokenName } from '../tokens';
 
-const WETH_MAINNET = '0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2';
-
-// New sub-components for better structure and styling
 function PanelSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: '16px' }}>
@@ -36,13 +37,34 @@ function TokenInput({ value, onChange, disabled = false }: { value: string; onCh
   );
 }
 
+function TokenSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: {id: string, name: string}[] }) {
+    return (
+        <select
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: '1px solid #d1d5db',
+                background: '#fff',
+                fontSize: '14px',
+                appearance: 'none'
+            }}
+        >
+            {options.map(opt => <option key={opt.id} value={opt.id}>{opt.name}</option>)}
+        </select>
+    )
+}
+
+
 export default function PlanPanel() {
+  const { address: evmWalletAddress, isConnected, chainId } = useAccount();
   const {
     direction,
     setDirection,
     amountOut,
     setAmountOut,
-    evmAddress,
     stellarAddress,
     intentId,
     intent,
@@ -50,14 +72,20 @@ export default function PlanPanel() {
   } = useApp();
 
   const [mode, setMode] = useState<AmountMode>('EXACT_OUT');
-  const [fromToken, setFromToken] = useState<string>(() =>
-    direction === 'EVM_TO_STELLAR' ? WETH_MAINNET : 'XLM'
-  );
-  const [toToken, setToToken] = useState<string>(() =>
-    direction === 'EVM_TO_STELLAR' ? 'XLM' : WETH_MAINNET
-  );
+  
+  const fromTokens = direction === 'EVM_TO_STELLAR' ? EVM_TOKENS : STELLAR_TOKENS;
+  const toTokens = direction === 'EVM_TO_STELLAR' ? STELLAR_TOKENS : EVM_TOKENS;
+
+  const [fromToken, setFromToken] = useState<string>(fromTokens[0].id);
+  const [toToken, setToToken] = useState<string>(toTokens[0].id);
+
+  useEffect(() => {
+    setFromToken(fromTokens[0].id);
+    setToToken(toTokens[0].id);
+  }, [direction]);
 
   const create = useCreateIntent();
+  const patch = usePatchIntent(intent?.id);
 
   const { data: polledIntent } = useIntent(intentId);
   useEffect(() => {
@@ -65,15 +93,66 @@ export default function PlanPanel() {
   }, [polledIntent, setIntent]);
 
   const toAddress = useMemo(
-    () => (direction === 'EVM_TO_STELLAR' ? (stellarAddress || '') : (evmAddress || '')),
-    [direction, evmAddress, stellarAddress]
+    () => (direction === 'EVM_TO_STELLAR' ? (stellarAddress || '') : (evmWalletAddress || '')),
+    [direction, evmWalletAddress, stellarAddress]
   );
+
+  // Lock logic states
+  const { lockUsdcOnEvm } = useEvm();
+  const [locking, setLocking] = useState(false);
+  const [balanceOk, setBalanceOk] = useState(true);
+  const [checkingBal, setCheckingBal] = useState(false);
+  const publicClient = usePublicClient();
+  const correctChain = chainId === cfg.evm.chainId;
+
+  // Check USDC balance
+  useEffect(() => {
+    let live = true;
+    async function check() {
+      if (!evmWalletAddress || !intent || !publicClient || direction !== 'EVM_TO_STELLAR') return;
+      setCheckingBal(true);
+      try {
+        const bal = (await publicClient.readContract({
+          address: cfg.evm.usdc as `0x${string}`,
+          abi: (await import('viem')).erc20Abi,
+          functionName: 'balanceOf',
+          args: [evmWalletAddress],
+        })) as bigint;
+        const need = BigInt(Math.ceil(parseFloat(intent.plan.minLock.evm) * 10 ** 6));
+        if (live) setBalanceOk(bal >= need);
+      } catch {
+        if (live) setBalanceOk(true); // default to true to avoid blocking UI on error
+      } finally {
+        if (live) setCheckingBal(false);
+      }
+    }
+    if (intent) check();
+    return () => {
+      live = false;
+    };
+  }, [evmWalletAddress, intent, publicClient, direction]);
+
+
+  async function onLockEvm() {
+    if (!intent) return;
+    try {
+      setLocking(true);
+      const { lockHash, swapId } = await lockUsdcOnEvm(intent);
+      patch.mutate({
+        status: 'evm_locked',
+        tx: { evmLock: lockHash, evmSwapId: swapId ?? '' },
+      });
+    } catch (e: any) {
+      alert(e?.message || String(e));
+    } finally {
+      setLocking(false);
+    }
+  }
+
 
   function swapDirection() {
     const next: Direction = direction === 'EVM_TO_STELLAR' ? 'STELLAR_TO_EVM' : 'EVM_TO_STELLAR';
     setDirection(next);
-    setFromToken(next === 'EVM_TO_STELLAR' ? WETH_MAINNET : 'XLM');
-    setToToken(next === 'EVM_TO_STELLAR' ? 'XLM' : WETH_MAINNET);
   }
 
   function onGetQuote() {
@@ -96,6 +175,10 @@ export default function PlanPanel() {
     const trimmed = f.replace(/0+$/, '').slice(0, maxDp);
     return trimmed ? `${i}.${trimmed}` : i;
   }
+
+  const quoteReceived = !!intent;
+  const showEvmLockButton = quoteReceived && direction === 'EVM_TO_STELLAR' && intent.status === 'created';
+  const evmLockDisabled = locking || !correctChain || checkingBal || !balanceOk || !isConnected;
 
   return (
     <div>
@@ -124,11 +207,11 @@ export default function PlanPanel() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 24px 1fr', gap: '8px', alignItems: 'center' }}>
           <PanelSection title="From Token">
-            <TokenInput value={fromToken} onChange={setFromToken} />
+            <TokenSelect value={fromToken} onChange={setFromToken} options={fromTokens}/>
           </PanelSection>
           <div style={{ textAlign: 'center', paddingTop: '24px' }}>→</div>
           <PanelSection title="To Token">
-            <TokenInput value={toToken} onChange={setToToken} />
+            <TokenSelect value={toToken} onChange={setToToken} options={toTokens}/>
           </PanelSection>
         </div>
 
@@ -143,16 +226,37 @@ export default function PlanPanel() {
           <TokenInput value={toAddress} onChange={() => {}} disabled />
         </PanelSection>
 
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <button
             className="btn"
             onClick={onGetQuote}
             disabled={create.isPending || !toAddress}
             title={!toAddress ? 'Connect destination wallet first' : ''}
-            style={{ width: '100%', padding: '12px' }}
+            style={{ 
+                width: '100%', 
+                padding: '12px',
+                background: quoteReceived ? '#10b981' : undefined,
+                borderColor: quoteReceived ? '#10b981' : undefined
+            }}
           >
-            {create.isPending ? 'Getting Quote…' : 'Get Quote'}
+            {create.isPending ? 'Getting Quote…' : (quoteReceived ? '✓ Quote Received' : 'Get Quote')}
           </button>
+
+          {showEvmLockButton && (
+            <>
+                {!correctChain && <div className="ll-muted" style={{ color: '#b45309', textAlign: 'center' }}>Wrong network</div>}
+                {!balanceOk && !checkingBal && <div className="ll-muted" style={{ color: '#b45309', textAlign: 'center' }}>Insufficient USDC balance</div>}
+                {checkingBal && <div className="ll-muted" style={{ textAlign: 'center' }}>Checking balance…</div>}
+                <button
+                    className="btn"
+                    onClick={onLockEvm}
+                    disabled={evmLockDisabled}
+                    style={{ width: '100%', padding: '12px' }}
+                >
+                    {locking ? 'Locking USDC…' : 'Lock USDC on Ethereum'}
+                </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -179,7 +283,7 @@ export default function PlanPanel() {
   );
 }
 
-// Extracted Quote Details to a new component
+// ... QuoteDetails component remains the same
 function QuoteDetails({ intent, pretty }: { intent: Intent; pretty: (s?: string | null, dp?: number) => string }) {
   const sum = intent.plan.summary;
   const mode = sum?.mode ?? intent.plan.mode;
@@ -208,8 +312,8 @@ function QuoteDetails({ intent, pretty }: { intent: Intent; pretty: (s?: string 
     youReceiveHuman = sum?.dst.amountHuman || intent.plan.stellarLeg?.destAmount || intent.request.amountOut;
   }
 
-  const srcToken = sum?.src.token ?? intent.request.fromToken;
-  const dstToken = sum?.dst.token ?? intent.request.toToken;
+  const srcToken = getTokenName(sum?.src.token ?? intent.request.fromToken);
+  const dstToken = getTokenName(sum?.dst.token ?? intent.request.toToken);
 
   const DetailRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #e5e7eb' }}>
