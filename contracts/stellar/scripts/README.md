@@ -64,6 +64,68 @@ yarn tsx scripts/create-swap.ts
 - Sends tokens from issuer to deployer
 - Creates an HTLC swap with the specified token_id
 
+### 5. `withdraw.ts`
+Withdraws funds from an HTLC swap using the preimage.
+
+**Usage:**
+```bash
+yarn tsx scripts/withdraw.ts
+```
+
+**What it does:**
+- Withdraws funds from a swap using the recipient's preimage
+- Requires `RECIPIENT_SECRET` environment variable to be set
+- Uses hardcoded swap ID and preimage for testing
+
+### 6. `withdraw-flexible.ts`
+Flexible withdraw script that accepts command line arguments.
+
+**Usage:**
+```bash
+yarn tsx scripts/withdraw-flexible.ts <swap-id> <preimage>
+```
+
+**Example:**
+```bash
+yarn tsx scripts/withdraw-flexible.ts test-swap-002 test-secret-123
+```
+
+**What it does:**
+- Withdraws funds from a swap using command line arguments
+- Requires `RECIPIENT_SECRET` environment variable to be set
+- More flexible for testing different scenarios
+
+### 7. `refund.ts`
+Refunds funds from an HTLC swap after timelock expires.
+
+**Usage:**
+```bash
+yarn tsx scripts/refund.ts
+```
+
+**What it does:**
+- Refunds funds to the sender after timelock expiration
+- Requires `SENDER_SECRET` environment variable to be set
+- Uses hardcoded swap ID for testing
+
+### 8. `refund-flexible.ts`
+Flexible refund script that accepts command line arguments.
+
+**Usage:**
+```bash
+yarn tsx scripts/refund-flexible.ts <swap-id>
+```
+
+**Example:**
+```bash
+yarn tsx scripts/refund-flexible.ts test-swap-002
+```
+
+**What it does:**
+- Refunds funds from a swap using command line arguments
+- Requires `SENDER_SECRET` environment variable to be set
+- More flexible for testing different scenarios
+
 ## How to Get the Token_ID
 
 The **token_id** is the Stellar Asset Contract (SAC) address that gets created when you deploy a Stellar asset to Soroban.
@@ -116,6 +178,8 @@ DISTRIBUTOR_SECRET=your_distributor_secret_key
 DEPLOYER_SECRET=your_deployer_secret_key
 HTLC_CONTRACT_ADDRESS=your_htlc_contract_address
 TOKEN_ID=your_sac_address
+RECIPIENT_SECRET=your_recipient_secret_key
+SENDER_SECRET=your_sender_secret_key
 ```
 
 ## Token_ID Format

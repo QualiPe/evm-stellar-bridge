@@ -53,19 +53,19 @@ export class IntentService {
     if (!i) {
       return null;
     }
-    
+
     // Update status
     i.status = status;
-    
+
     // Update tx field if provided
     if (tx) {
       // Ensure tx field exists and merge with existing data
       i.tx = { ...(i.tx || {}), ...tx };
     }
-    
+
     // Update the store
     store.set(id, i);
-    
+
     // Return the updated intent (without preimage)
     const { preimage, ...rest } = i;
     return rest;

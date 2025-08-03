@@ -9,6 +9,7 @@ import {
 import { Keypair, Networks } from "@stellar/stellar-sdk";
 import dotenv from "dotenv";
 import path from "path";
+import crypto from "crypto";
 
 const envPath = path.join(__dirname, "..", ".env");
 dotenv.config({ path: envPath });
@@ -81,15 +82,23 @@ const main = async () => {
     Networks.TESTNET
   );
 
+  const secret = "test-secret-123";
   // 6. Create a new swap
   await createSwap(
     client,
-    deployerKeypair.publicKey(),
-    deployerKeypair.publicKey(),
-    TOKEN_ID,
-    BigInt(1000),
-    10 // 10 hours timelock
+    {
+      sender: deployerKeypair.publicKey(),
+      recipient: deployerKeypair.publicKey(),
+      tokenId: TOKEN_ID,
+      amount: BigInt(1000),
+      timelockHours: 10, // 10 hours timelock
+      swapId: Buffer.from("test-swap-003"),
+      secret,
+    }
   );
+
+  console.log("Swap created successfully");
+  console.log("Secret hash:", crypto.createHash("sha256").update(secret).digest("hex"));
 };
 
 main();

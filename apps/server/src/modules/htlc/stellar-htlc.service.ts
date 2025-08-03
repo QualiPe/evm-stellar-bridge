@@ -1,4 +1,12 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { Client, Keypair, Networks } from '@QualiPe/htlc-contract';
+import {
+  createClient,
+  createSwap,
+  getSwap,
+  refund,
+  withdraw,
+} from '@QualiPe/htlc-helpers';
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 import { ENV as env } from '../../shared/config.module';
@@ -12,88 +20,90 @@ import {
 @Injectable()
 export class StellarHtlcService {
   private readonly logger = new Logger(StellarHtlcService.name);
+  private readonly client: Client;
+  private readonly adminKeypair: Keypair;
   private swapCounter: number = 0; // Track swap counter like the EVM contract
-  private swaps = new Map<string, any>(); // Mock storage for swaps
 
   constructor() {
-    this.logger.log('StellarHtlcService initialized (mock mode)');
+    this.adminKeypair = Keypair.fromSecret(env.STELLAR_DEPLOYER_SECRET);
+
+    this.client = createClient({
+      networkPassphrase: Networks.TESTNET,
+      rpcUrl: 'https://soroban-testnet.stellar.org', // TODO: use env variable or something
+      contractId: env.STELLAR_HTLC_CONTRACT_ADDRESS,
+      signerKeypair: this.adminKeypair,
+    });
   }
 
   async fund(params: CreateSwapDto): Promise<string> {
-    this.logger.log(`Mock: Creating Stellar HTLC swap for recipient: ${params.recipient}`);
-    
-    // Generate hashlock from secret
-    const preimage = Buffer.from(params.secret, 'utf8');
-    const hashlock = '0x' + crypto.createHash('sha256').update(preimage).digest('hex');
-    
-    // Calculate timelock
-    const timelock = Math.floor(Date.now() / 1000) + params.timelockHours * 3600;
-    
-    // Generate swap ID using the same logic as the Ethereum contract
-    const swapId = this.generateSwapId(
-      'mock-sender',
-      params.recipient,
-      BigInt(params.amount),
-      hashlock,
-      BigInt(timelock),
+    // Convert amount to bigint
+    const amount = BigInt(params.amount);
+
+    // Calculate timelock (convert hours to seconds and add to current time)
+    const timelock = BigInt(
+      Math.floor(Date.now() / 1000) + params.timelockHours * 3600,
     );
 
-    // Store swap in mock storage
-    this.swaps.set(swapId, {
-      swapId,
-      sender: 'mock-sender',
+    // Generate hashlock for EVM compatibility (the helpers will handle Soroban format)
+    const preimage = Buffer.from(params.secret, 'utf8');
+    const hashlockHex =
+      '0x' + crypto.createHash('sha256').update(preimage).digest('hex');
+
+    // Generate swap ID using the same logic as the Ethereum contract
+    const swapId = this.generateSwapId(
+      this.adminKeypair.publicKey(),
+      params.recipient,
+      amount,
+      hashlockHex, // Use hex version for EVM compatibility
+      timelock,
+    );
+
+    // Convert swapId to buffer for Stellar contract
+    const swapIdBuffer = Buffer.from(swapId.slice(2), 'hex'); // Remove '0x' prefix
+
+    await createSwap(this.client, {
+      swapId: swapIdBuffer,
+      sender: this.adminKeypair.publicKey(),
       recipient: params.recipient,
       tokenId: params.tokenId,
-      amount: params.amount,
-      hashlock: hashlock,
-      timelock: timelock,
-      secret: params.secret,
-      isWithdrawn: false,
-      isRefunded: false,
-      createdAt: Date.now()
+      amount: amount,
+      timelockHours: params.timelockHours,
+      secret: params.secret, // Pass secret directly - helpers will hash it
     });
 
     return swapId;
   }
 
   async withdraw(params: WithdrawSwapDto): Promise<string> {
-    this.logger.log(`Mock: Withdrawing Stellar HTLC swap: ${params.swapId}`);
-    
-    const swap = this.swaps.get(params.swapId);
-    if (!swap) {
-      throw new HttpException('Swap not found', HttpStatus.NOT_FOUND);
-    }
+    const swapId = Buffer.from(params.swapId, 'hex');
+    const preimage = Buffer.from(params.preimage, 'utf8');
 
-    swap.isWithdrawn = true;
-    swap.preimage = params.preimage;
-    this.swaps.set(params.swapId, swap);
+    await withdraw(this.client, {
+      swapId,
+      recipient: params.recipient,
+      preimage,
+    });
 
     return params.swapId;
   }
 
   async refund(params: RefundSwapDto): Promise<string> {
-    this.logger.log(`Mock: Refunding Stellar HTLC swap: ${params.swapId}`);
-    
-    const swap = this.swaps.get(params.swapId);
-    if (!swap) {
-      throw new HttpException('Swap not found', HttpStatus.NOT_FOUND);
-    }
-
-    swap.isRefunded = true;
-    this.swaps.set(params.swapId, swap);
-
+    const swapId = Buffer.from(params.swapId, 'hex');
+    await refund(this.client, swapId, params.sender);
     return params.swapId;
   }
 
   async getSwap(swapId: string): Promise<StellarSwap> {
-    const swap = this.swaps.get(swapId);
+    const swapIdBuffer = Buffer.from(swapId, 'hex');
+    const swap = await getSwap(this.client, swapIdBuffer);
     if (!swap) {
       throw new HttpException('Swap not found', HttpStatus.NOT_FOUND);
     }
 
-    const status = swap.isWithdrawn
+    // Transform HTLCSwap to StellarSwap format
+    const status = swap.is_withdrawn
       ? 'withdrawn'
-      : swap.isRefunded
+      : swap.is_refunded
         ? 'refunded'
         : 'active';
 
@@ -101,15 +111,17 @@ export class StellarHtlcService {
       swapId,
       sender: swap.sender,
       recipient: swap.recipient,
-      tokenId: swap.tokenId,
+      tokenId: swap.token,
       amount: String(swap.amount),
       timelockHours: Math.floor(
         Number(swap.timelock - BigInt(Math.floor(Date.now() / 1000))) / 3600,
       ),
       secret: '', // Not available from contract
-      hashlock: swap.hashlock,
+      hashlock: '0x' + Buffer.from(swap.hashlock).toString('hex'),
       timelock: Number(swap.timelock),
-      preimage: swap.preimage || '',
+      preimage: swap.preimage
+        ? '0x' + Buffer.from(swap.preimage).toString('hex')
+        : '',
       status,
     };
   }
