@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../state/appStore';
-import { useCreateIntent } from '../hooks/useIntent';
+import { useCreateIntent, useIntent } from '../hooks/useIntent';
+import Steps from './Steps';
 import type { AmountMode, Direction, CreateIntentInput, Intent } from '../types/intent';
 import { cfg } from '../config';
 import { formatUnits } from '../utils/units';
@@ -15,6 +16,7 @@ export default function PlanPanel() {
     setAmountOut,
     evmAddress,
     stellarAddress,
+    intentId,
     intent,
     setIntent,
   } = useApp();
@@ -28,6 +30,12 @@ export default function PlanPanel() {
   );
 
   const create = useCreateIntent();
+
+  // polling intent status
+  const { data: polledIntent } = useIntent(intentId);
+  useEffect(() => {
+    if (polledIntent) setIntent(polledIntent);
+  }, [polledIntent, setIntent]);
 
   const toAddress = useMemo(
     () => (direction === 'EVM_TO_STELLAR' ? (stellarAddress || '') : (evmAddress || '')),
@@ -222,6 +230,7 @@ export default function PlanPanel() {
                         Quote TTL: {sum.quoteTtlSec}s
                     </div>
                     )}
+                <Steps intent={intent} />
                 </div>
                 </div>
             );
