@@ -1,7 +1,12 @@
-import { Body, Controller, Get, Logger, Post } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Param, Post } from '@nestjs/common';
 import { StellarHtlcService } from './stellar-htlc.service';
 import { ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { CreateSwapDto } from './dtos/stellar-swap.dto';
+import {
+  CreateSwapDto,
+  RefundSwapDto,
+  StellarSwap,
+  WithdrawSwapDto,
+} from './dtos/stellar-swap.dto';
 
 @Controller('htlc/stellar')
 export class StellarHtlcController {
@@ -9,7 +14,7 @@ export class StellarHtlcController {
 
   constructor(private readonly stellarHtlcService: StellarHtlcService) {}
 
-  @Get('stellar/status')
+  @Get('status')
   @ApiOperation({ summary: 'Get Stellar HTLC service status' })
   @ApiResponse({ status: 200, description: 'Service status' })
   getStellarStatus() {
@@ -45,7 +50,7 @@ export class StellarHtlcController {
   //   return await this.stellarHtlcService.getSwap(swapId);
   // }
 
-  @Post('stellar/create')
+  @Post('create')
   @ApiOperation({ summary: 'Create a new Stellar HTLC swap' })
   @ApiResponse({ status: 201, description: 'Swap created successfully' })
   @ApiBody({ type: CreateSwapDto })
@@ -57,31 +62,60 @@ export class StellarHtlcController {
     return { success: true, swapId };
   }
 
-  // @Post('stellar/withdraw')
-  // @ApiOperation({ summary: 'Withdraw from Stellar HTLC swap' })
-  // @ApiResponse({ status: 200, description: 'Withdrawal successful' })
-  // async withdrawStellarSwap(
-  //   @Body() body: { swapId: string; recipient: string; preimage: string },
-  // ): Promise<{ success: boolean }> {
-  //   this.logger.log(`Withdrawing from Stellar HTLC swap: ${body.swapId}`);
-  //   await this.stellarHtlcService.withdraw(
-  //     body.swapId,
-  //     body.recipient,
-  //     body.preimage,
-  //   );
-  //   return { success: true };
-  // }
+  @Post('withdraw')
+  @ApiOperation({ summary: 'Withdraw from Stellar HTLC swap' })
+  @ApiResponse({ status: 200, description: 'Withdrawal successful' })
+  async withdrawStellarSwap(
+    @Body() data: WithdrawSwapDto,
+  ): Promise<{ success: boolean }> {
+    this.logger.log(`Withdrawing from Stellar HTLC swap: ${data.swapId}`);
+    await this.stellarHtlcService.withdraw(data);
+    return { success: true };
+  }
 
-  // @Post('stellar/refund')
-  // @ApiOperation({ summary: 'Refund Stellar HTLC swap' })
-  // @ApiResponse({ status: 200, description: 'Refund successful' })
-  // async refundStellarSwap(
-  //   @Body() body: { swapId: string; sender: string },
-  // ): Promise<{ success: boolean }> {
-  //   this.logger.log(`Refunding Stellar HTLC swap: ${body.swapId}`);
-  //   await this.stellarHtlcService.refund(body.swapId, body.sender);
-  //   return { success: true };
-  // }
+  @Post('refund')
+  @ApiOperation({ summary: 'Refund Stellar HTLC swap' })
+  @ApiResponse({ status: 200, description: 'Refund successful' })
+  async refundStellarSwap(
+    @Body() data: RefundSwapDto,
+  ): Promise<{ success: boolean }> {
+    this.logger.log(`Refunding Stellar HTLC swap: ${data.swapId}`);
+    await this.stellarHtlcService.refund(data);
+    return { success: true };
+  }
+
+  @Get('swap/:swapId')
+  @ApiOperation({ summary: 'Get Stellar swap details' })
+  @ApiResponse({ status: 200, description: 'Swap details', type: Object })
+  async getStellarSwap(@Param('swapId') swapId: string): Promise<StellarSwap> {
+    this.logger.log(`Getting Stellar swap details for: ${swapId}`);
+    return await this.stellarHtlcService.getSwap(swapId);
+  }
+
+  @Get('swap/:swapId/funded')
+  @ApiOperation({ summary: 'Check if Stellar swap is funded' })
+  @ApiResponse({ status: 200, description: 'Funding status' })
+  async isStellarSwapFunded(
+    @Param('swapId') swapId: string,
+  ): Promise<{ funded: boolean }> {
+    this.logger.log(`Checking if Stellar swap is funded: ${swapId}`);
+    const swap = await this.stellarHtlcService.getSwap(swapId);
+    const funded = swap.status === 'active' || swap.status === 'withdrawn';
+    return { funded };
+  }
+
+  @Get('swap/:swapId/expired')
+  @ApiOperation({ summary: 'Check if Stellar swap is expired' })
+  @ApiResponse({ status: 200, description: 'Expiration status' })
+  async isStellarSwapExpired(
+    @Param('swapId') swapId: string,
+  ): Promise<{ expired: boolean }> {
+    this.logger.log(`Checking if Stellar swap is expired: ${swapId}`);
+    const swap = await this.stellarHtlcService.getSwap(swapId);
+    const expired =
+      swap.status === 'active' && swap.timelock < Math.floor(Date.now() / 1000);
+    return { expired };
+  }
 
   // @Post('stellar/verify-preimage')
   // @ApiOperation({ summary: 'Verify preimage for Stellar HTLC swap' })

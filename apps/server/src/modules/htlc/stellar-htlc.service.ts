@@ -1,10 +1,21 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { Client, Keypair, Networks } from '@QualiPe/htlc-contract';
-import { createClient, createSwap } from '@QualiPe/htlc-helpers';
+import {
+  createClient,
+  createSwap,
+  getSwap,
+  refund,
+  withdraw,
+} from '@QualiPe/htlc-helpers';
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 import { ENV as env } from '../../shared/config.module';
-import { CreateSwapDto } from './dtos/stellar-swap.dto';
+import {
+  CreateSwapDto,
+  RefundSwapDto,
+  StellarSwap,
+  WithdrawSwapDto,
+} from './dtos/stellar-swap.dto';
 
 @Injectable()
 export class StellarHtlcService {
@@ -61,6 +72,58 @@ export class StellarHtlcService {
     });
 
     return swapId;
+  }
+
+  async withdraw(params: WithdrawSwapDto): Promise<string> {
+    const swapId = Buffer.from(params.swapId, 'hex');
+    const preimage = Buffer.from(params.preimage, 'utf8');
+
+    await withdraw(this.client, {
+      swapId,
+      recipient: params.recipient,
+      preimage,
+    });
+
+    return params.swapId;
+  }
+
+  async refund(params: RefundSwapDto): Promise<string> {
+    const swapId = Buffer.from(params.swapId, 'hex');
+    await refund(this.client, swapId, params.sender);
+    return params.swapId;
+  }
+
+  async getSwap(swapId: string): Promise<StellarSwap> {
+    const swapIdBuffer = Buffer.from(swapId, 'hex');
+    const swap = await getSwap(this.client, swapIdBuffer);
+    if (!swap) {
+      throw new HttpException('Swap not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Transform HTLCSwap to StellarSwap format
+    const status = swap.is_withdrawn
+      ? 'withdrawn'
+      : swap.is_refunded
+        ? 'refunded'
+        : 'active';
+
+    return {
+      swapId,
+      sender: swap.sender,
+      recipient: swap.recipient,
+      tokenId: swap.token,
+      amount: String(swap.amount),
+      timelockHours: Math.floor(
+        Number(swap.timelock - BigInt(Math.floor(Date.now() / 1000))) / 3600,
+      ),
+      secret: '', // Not available from contract
+      hashlock: '0x' + Buffer.from(swap.hashlock).toString('hex'),
+      timelock: Number(swap.timelock),
+      preimage: swap.preimage
+        ? '0x' + Buffer.from(swap.preimage).toString('hex')
+        : '',
+      status,
+    };
   }
 
   /**

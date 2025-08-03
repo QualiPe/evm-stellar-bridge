@@ -1,4 +1,4 @@
-import { Client, Keypair, Networks } from "@QualiPe/htlc-contract";
+import { Client, HTLCSwap, Keypair, Networks } from "@QualiPe/htlc-contract";
 import { Asset, BASE_FEE, Networks as StellarNetworks, Operation, rpc, TransactionBuilder, Account } from "@stellar/stellar-sdk";
 import { basicNodeSigner } from "@stellar/stellar-sdk/contract";
 import crypto from "crypto";
@@ -340,10 +340,15 @@ export const createAsset = (assetCode: string, assetIssuer: string) => {
 
 export const withdraw = async (
   client: Client,
-  swapId: Buffer,
-  recipient: string,
-  preimage: Buffer
-) => {
+  {
+    swapId,
+    recipient,
+    preimage,
+  }: {
+    swapId: Buffer,
+    recipient: string,
+    preimage: Buffer
+}) => {
   console.log("Withdrawing swap with swap_id:", swapId.toString("hex"));
   const withdrawResult = await client.withdraw({
     swap_id: swapId,
@@ -377,13 +382,18 @@ export const refund = async (
 export const getSwap = async (
   client: Client,
   swapId: Buffer
-) => {
+): Promise<HTLCSwap | null> => {
   console.log("Getting swap details for swap_id:", swapId.toString("hex"));
   const swap = await client.get_swap({
     swap_id: swapId,
   });
 
   console.log("Swap details retrieved:", swap.result);
+
+  if (!swap.result) {
+    return null;
+  }
+
   return swap.result;
 };
 
