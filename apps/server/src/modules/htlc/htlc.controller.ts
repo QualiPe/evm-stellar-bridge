@@ -6,6 +6,7 @@ import {
   EvmSwapDetails,
 } from './evm-htlc.service';
 import { RelayerService } from './relayer.service';
+import { IntentService } from '../intent/intent.service';
 
 @ApiTags('htlc')
 @Controller('htlc')
@@ -15,6 +16,7 @@ export class HtlcController {
   constructor(
     private readonly evmHtlcService: EvmHtlcService,
     private readonly relayerService: RelayerService,
+    private readonly intentService: IntentService,
   ) {}
 
   @Get('evm/status')
@@ -75,10 +77,21 @@ export class HtlcController {
   @ApiOperation({ summary: 'Fund a new EVM HTLC swap' })
   @ApiResponse({ status: 201, description: 'Swap funded successfully' })
   async fundEvmSwap(
-    @Body() params: EvmFundParams,
+    @Body() body: EvmFundParams & { intentId?: string },
   ): Promise<{ swapId: string }> {
-    this.logger.log(`Funding EVM HTLC swap: ${JSON.stringify(params)}`);
+    this.logger.log(`Funding EVM HTLC swap: ${JSON.stringify(body)}`);
+    
+    // Extract intentId and remove it from params
+    const { intentId, ...params } = body;
+    
     const swapId = await this.evmHtlcService.fund(params);
+    
+    // If intentId is provided, update the intent's tx field with the SwapId
+    if (intentId) {
+      this.logger.log(`Updating intent ${intentId} with SwapId: ${swapId}`);
+      this.intentService.patchStatus(intentId, 'evm_locked', { swapId });
+    }
+    
     return { swapId };
   }
 

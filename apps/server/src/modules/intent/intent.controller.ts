@@ -116,4 +116,26 @@ export class IntentController {
     if (!i) throw new NotFoundException('Intent not found');
     return { preimage: i.preimage };
   }
+
+  @Get('find-by-swapid/:swapId')
+  @ApiOperation({ summary: 'Find intent by SwapId' })
+  @ApiParam({ name: 'swapId', example: '0x1234567890abcdef...' })
+  @ApiOkResponse({ type: IntentDto })
+  @ApiNotFoundResponse({ description: 'Intent not found' })
+  findBySwapId(@Param('swapId') swapId: string) {
+    const i = this.svc.findBySwapId(swapId);
+    if (!i) throw new NotFoundException('Intent not found');
+    return i;
+  }
+
+  @Get('find-by-hashlock/:hashlock')
+  @ApiOperation({ summary: 'Find intent by hashlock' })
+  @ApiParam({ name: 'hashlock', example: '0x1234567890abcdef...' })
+  @ApiOkResponse({ type: IntentDto })
+  @ApiNotFoundResponse({ description: 'Intent not found' })
+  findByHashlock(@Param('hashlock') hashlock: string) {
+    const i = this.svc.findByHashlock(hashlock);
+    if (!i) throw new NotFoundException('Intent not found');
+    return i;
+  }
 }

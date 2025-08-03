@@ -29,7 +29,8 @@ async function testFinalSwapIdFlow() {
       recipient: '0xc5a30632C77E18a5Cb5481c8bb0572c83EeA6508',
       amount: '1000',
       hashlock: hashlock,
-      timelock: Math.floor(Date.now() / 1000) + 3600
+      timelock: Math.floor(Date.now() / 1000) + 3600,
+      intentId: intentId // Add intentId to link the swap to the intent
     };
 
     const fundResponse = await axios.post('http://localhost:3000/htlc/evm/fund', fundParams);

@@ -234,14 +234,12 @@ export class RelayerService {
         throw new Error(`Invalid timelock value: ${intent.plan.timelocks.stellarSec}`);
       }
       
-      await this.stellarHtlcService.createSwap({
-        swapId: intent.plan.hash,
-        sender: intent.request.toAddress, // Recipient on EVM becomes sender on Stellar
+      await this.stellarHtlcService.fund({
         recipient: intent.request.toAddress,
-        token: 'USDC',
-        amount: BigInt(stellarAmount),
-        hashlock: intent.plan.hash,
-        timelock: BigInt(timelockValue)
+        tokenId: 'USDC',
+        amount: stellarAmount.toString(),
+        timelockHours: Math.floor(timelockValue / 3600),
+        secret: 'mock-secret-for-testing'
       });
 
       this.intentService.patchStatus(intent.id, 'stellar_locked');
@@ -267,7 +265,7 @@ export class RelayerService {
         intent.plan.hash,
       );
 
-      if (stellarSwap && stellarSwap.isWithdrawn) {
+      if (stellarSwap && stellarSwap.status === 'withdrawn') {
         this.intentService.patchStatus(intent.id, 'withdrawn_stellar');
         this.logger.log(`Swap ${intent.id} marked as Stellar withdrawn`);
       }
