@@ -7,7 +7,11 @@
   },
   "scripts": {
     "scripts": "tsx scripts",
-    "package:prepare": "pnpx tsx scripts/prepare-package.ts"
+    "package:prepare": "pnpx tsx scripts/prepare-package.ts",
+    "withdraw": "tsx scripts/withdraw.ts",
+    "withdraw:flexible": "tsx scripts/withdraw-flexible.ts",
+    "refund": "tsx scripts/refund.ts",
+    "refund:flexible": "tsx scripts/refund-flexible.ts"
   },
   "devDependencies": {
     "@types/node": "^24.1.0",

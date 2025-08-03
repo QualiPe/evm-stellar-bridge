@@ -137,5 +137,5 @@ export class StellarSwap {
     description: 'The status of the swap',
     example: 'created',
   })
-  status: string;
+  status: 'active' | 'withdrawn' | 'refunded';
 }
