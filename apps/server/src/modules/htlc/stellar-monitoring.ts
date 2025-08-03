@@ -1,4 +1,4 @@
-import { Api, Server } from '@stellar/stellar-sdk/lib/rpc';
+import { Api, Server } from '@stellar/stellar-sdk/rpc';
 import { ENV as env } from '../../shared/config.module';
 import { scValToNative } from '@stellar/stellar-sdk';
 
