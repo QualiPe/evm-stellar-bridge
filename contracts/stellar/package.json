@@ -1,22 +1,22 @@
 {
-  "name": "@QualiPe/htlc-contract",
-  "version": "0.0.0",
-  "type": "module",
+  "name": "stellar-htlc",
+  "version": "0.0.1",
+  "type": "commonjs",
   "packageVersions": {
-    "@QualiPe/htlc-contract": "0.0.1-dev"
-  },
-  "repository": "https://github.com/QualiPe/evm-stellar-bridge",
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
-  },
-  "devDependencies": {
-    "@types/node": "^22.17.0",
-    "contracts": "^0.4.0",
-    "dotenv": "^17.2.1",
-    "typescript": "^5.8.3"
+    "@QualiPe/htlc-contract": "0.0.1"
   },
   "scripts": {
-    "package:prepare": "pnpx tsx scripts/prepare-package.ts",
-    "package:publish": "pnpx tsx scripts/publish-package.ts"
+    "scripts": "tsx scripts",
+    "package:prepare": "pnpx tsx scripts/prepare-package.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "dotenv": "^17.2.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^14.0.0-rc.3",
+    "@QualiPe/htlc-helpers": "workspace:*"
   }
 }

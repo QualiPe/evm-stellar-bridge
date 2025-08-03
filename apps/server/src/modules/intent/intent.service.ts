@@ -50,11 +50,92 @@ export class IntentService {
 
   patchStatus(id: string, status: IntentStatus, tx?: Record<string, string>) {
     const i = store.get(id);
-    if (!i) return null;
+    if (!i) {
+      return null;
+    }
+    
+    // Update status
     i.status = status;
-    if (tx) i.tx = { ...(i.tx ?? {}), ...tx };
+    
+    // Update tx field if provided
+    if (tx) {
+      // Ensure tx field exists and merge with existing data
+      i.tx = { ...(i.tx || {}), ...tx };
+    }
+    
+    // Update the store
     store.set(id, i);
+    
+    // Return the updated intent (without preimage)
     const { preimage, ...rest } = i;
     return rest;
+  }
+
+  /**
+   * Get intent with preimage (for relayer use)
+   */
+  getWithPreimage(id: string): (Intent & { preimage?: string }) | null {
+    return store.get(id) || null;
+  }
+
+  /**
+   * Get all active intents
+   */
+  getActiveIntents(): Intent[] {
+    const activeStatuses: IntentStatus[] = [
+      'created',
+      'evm_locked',
+      'stellar_locked',
+      'withdrawn_stellar',
+      'withdrawn_evm',
+    ];
+    const activeIntents: Intent[] = [];
+
+    for (const [id, intent] of store.entries()) {
+      if (activeStatuses.includes(intent.status)) {
+        const { preimage, ...intentWithoutPreimage } = intent;
+        activeIntents.push(intentWithoutPreimage);
+      }
+    }
+
+    return activeIntents;
+  }
+
+  /**
+   * Find intent by hashlock
+   */
+  findByHashlock(hashlock: string): Intent | null {
+    for (const [id, intent] of store.entries()) {
+      if (intent.plan.hash === hashlock) {
+        const { preimage, ...intentWithoutPreimage } = intent;
+        return intentWithoutPreimage;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Find intent by swapId (stored in tx field)
+   */
+  findBySwapId(swapId: string): Intent | null {
+    for (const [id, intent] of store.entries()) {
+      if (intent.tx?.swapId === swapId) {
+        const { preimage, ...intentWithoutPreimage } = intent;
+        return intentWithoutPreimage;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Get all intents (for debugging)
+   */
+  getAllIntents(): Intent[] {
+    const intents: Intent[] = [];
+    for (const [id, intent] of store.entries()) {
+      const { preimage, ...intentWithoutPreimage } = intent;
+      intents.push(intentWithoutPreimage);
+    }
+    return intents;
   }
 }

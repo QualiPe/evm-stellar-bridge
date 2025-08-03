@@ -4,7 +4,7 @@ import { config as dotenvConfig } from 'dotenv';
 import { resolve } from 'node:path';
 
 dotenvConfig({
-    path: resolve(process.cwd(), '.env'),
+  path: resolve(process.cwd(), '.env'),
 });
 
 export const EnvSchema = z.object({
@@ -14,6 +14,15 @@ export const EnvSchema = z.object({
   HORIZON_URL: z.string().url(),
   STELLAR_USDC_ISSUER: z.string().min(56),
   MIN_HAIRCUT_BPS: z.coerce.number().default(50),
+
+  // Stellar
+  STELLAR_ISSUER_SECRET: z.string().min(56),
+  STELLAR_DISTRIBUTOR_SECRET: z.string().min(56),
+  STELLAR_DEPLOYER_SECRET: z.string().min(56),
+  STELLAR_HTLC_CONTRACT_ADDRESS: z.string().min(56),
+  STELLAR_TOKEN_ID: z.string().min(56),
+  STELLAR_ASSET_ADDRESS: z.string().min(56),
+  STELLAR_ASSET_CODE: z.string(),
 });
 
 export type AppEnv = z.infer<typeof EnvSchema>;

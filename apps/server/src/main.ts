@@ -7,7 +7,10 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { cors: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
-  const cfg = new DocumentBuilder().setTitle('Intent API').setVersion('0.1').build();
+  const cfg = new DocumentBuilder()
+    .setTitle('Intent API')
+    .setVersion('0.1')
+    .build();
   const doc = SwaggerModule.createDocument(app, cfg);
   SwaggerModule.setup('docs', app, doc);
 

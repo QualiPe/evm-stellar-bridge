@@ -13,5 +13,12 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@10.13.1"
+  "packageManager": "pnpm@10.13.1",
+  "devDependencies": {
+    "pnpm": "^10.14.0"
+  },
+  "dependencies": {
+    "@QualiPe/htlc-contract": "file:packages/htlc-contract",
+    "@stellar/stellar-sdk": "^13.3.0"
+  }
 }
