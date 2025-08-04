@@ -117,11 +117,14 @@ export default function StellarPanel() {
 
   return (
     <div>
-      <h2 className="ll-panel-title">Stellar Wallet</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '8px', marginBottom: '16px' }}>
+        <img src="/stellar-logo.png" alt="Stellar Logo" style={{ height: '18px' }} />
+        <h2 className="ll-panel-title" style={{ margin: 0 }}>Stellar Wallet</h2>
+      </div>
 
       {!addr ? (
         <>
-          <button className="btn" onClick={connect}>Connect Freighter</button>
+          <button className="btn" onClick={connect}>Connect Wallet</button>
           {warning && <div className="ll-muted" style={{ color: '#b45309', marginTop: 8 }}>{warning}</div>}
           {error && <div style={{ color: '#b91c1c', marginTop: 8 }}>{error}</div>}
         </>

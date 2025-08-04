@@ -33,7 +33,10 @@ export default function EvmPanel() {
 
   return (
     <div>
-      <h2 className="ll-panel-title">EVM Wallet</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '8px', marginBottom: '16px' }}>
+        <img src="/evm-logo.png" alt="EVM Logo" style={{ height: '18px' }} />
+        <h2 className="ll-panel-title" style={{ margin: 0 }}>EVM Wallet</h2>
+      </div>
 
       {!isConnected ? (
         <button className="btn" onClick={() => connect({ connector: mmConnector })} disabled={isPending}>
